@@ -3,6 +3,8 @@ import Navbar from './components/Navbar'
 import ProductList from './components/ProductList'
 import CustomersList from './components/CustomersList'
 import OrdersList from './components/OrdersList'
+import ResetPage from './pages/ResetPage'
+// import StocksList from './components/StocksList'
 import './App.css'
 
 function App() {
@@ -15,6 +17,8 @@ function App() {
           <Route path="/products" element={<ProductList />} />
           <Route path="/customers" element={<CustomersList />} />
           <Route path="/orders" element={<OrdersList />} />
+          <Route path="/reset" element={<ResetPage />} />
+          {/* <Route path="/stocks" element={<StocksList />} /> */}
         </Routes>
       </main>
     </BrowserRouter>
