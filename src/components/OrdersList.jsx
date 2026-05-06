@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getAllOrders, getOrderById } from '../api/services/ordersService'
+import './List.css'
 
 const OrdersList = () => {
   const [orders, setOrders] = useState([])
@@ -12,41 +13,51 @@ const OrdersList = () => {
         const data = await getAllOrders()
         const ordersList = data?.prestashop?.orders?.order
         const ordersArray = Array.isArray(ordersList) ? ordersList : [ordersList]
-
         const ordersDetails = await Promise.all(
           ordersArray.map(async (order) => {
             const detail = await getOrderById(order['@_id'])
             return detail?.prestashop?.order
           })
         )
-
         setOrders(ordersDetails)
       } catch (err) {
         setError(err.message)
-        console.error(err)
       } finally {
         setLoading(false)
       }
     }
-
     fetchOrders()
   }, [])
 
-  if (loading) return <p>Chargement...</p>
-  if (error) return <p style={{ color: 'red' }}>{error}</p>
+  if (loading) return <div className="loading">Chargement des commandes...</div>
+  if (error) return <div className="error">{error}</div>
 
   return (
-    <div>
-      <h1>Orders PrestaShop</h1>
-      <ul>
-        {orders.map((order) => (
-          <li key={order['@_id'] || order?.id}>
-            <strong>{order?.reference}</strong>
-            {' - '}
-            {order?.total_paid} €
-          </li>
-        ))}
-      </ul>
+    <div className="list-container">
+      <div className="list-header">
+        <h1>Commandes</h1>
+        <span className="badge">{orders.length}</span>
+      </div>
+      <table className="list-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Référence</th>
+            <th>Total</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order) => (
+            <tr key={order['@_id'] || order?.id}>
+              <td className="id-cell">#{order?.id}</td>
+              <td><strong>{order?.reference || '—'}</strong></td>
+              <td className="price-cell">{parseFloat(order?.total_paid).toFixed(2)} €</td>
+              <td className="date-cell">{order?.date_add?.split(' ')[0] || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
