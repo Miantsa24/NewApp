@@ -12,25 +12,45 @@ const CustomersList = () => {
       try {
         const data = await getAllCustomers()
         const customerList = data?.prestashop?.customers?.customer
+
+        // Aucun client trouvé
+        if (!customerList) {
+          setCustomers([])
+          return
+        }
+
         const customersArray = Array.isArray(customerList) ? customerList : [customerList]
+
         const customersDetails = await Promise.all(
           customersArray.map(async (customer) => {
             const detail = await getCustomerById(customer['@_id'])
             return detail?.prestashop?.customer
           })
         )
-        setCustomers(customersDetails)
+
+        // Filtrer les résultats undefined
+        setCustomers(customersDetails.filter(Boolean))
       } catch (err) {
         setError(err.message)
+        console.error(err)
       } finally {
         setLoading(false)
       }
     }
+
     fetchCustomers()
   }, [])
 
   if (loading) return <div className="loading">Chargement des clients...</div>
   if (error) return <div className="error">{error}</div>
+
+  if (customers.length === 0) return (
+    <div className="empty-state">
+      <i className="ti ti-users" aria-hidden="true"></i>
+      <p>Aucun client détecté</p>
+      <span>Importez des clients via la page Import CSV</span>
+    </div>
+  )
 
   return (
     <div className="list-container">

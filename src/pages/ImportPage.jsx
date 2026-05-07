@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { parseCsvFile, importCsv } from '../api/services/importService'
+import { parseCsvFile, importCsv, detectDelimiter } from '../api/services/importService'
 import { MODULES_CONFIG, MODULE_KEYS } from '../api/utils/modulesConfig'
 import './ImportPage.css'
 
@@ -40,52 +40,66 @@ const ImportPage = () => {
   }
 
   // --- Étape 2 : upload + validation ---
-  const handleFileChange = async (e) => {
-    const selected = e.target.files[0]
-    setFileError(null)
-    setMissingRequired([])
-    if (!selected) return
+const handleFileChange = async (e) => {
+  const selected = e.target.files[0]
+  setFileError(null)
+  setMissingRequired([])
+  if (!selected) return
 
-    if (!selected.name.endsWith('.csv')) {
-      setFileError('Le fichier doit être au format .csv')
-      return
-    }
-
-    const sizeMb = selected.size / (1024 * 1024)
-    if (sizeMb > MAX_FILE_SIZE_MB) {
-      setFileError(`Le fichier dépasse ${MAX_FILE_SIZE_MB}MB`)
-      return
-    }
-
-    try {
-      const parsed = await parseCsvFile(selected, delimiter)
-
-      if (parsed.length === 0) {
-        setFileError('Le fichier CSV est vide')
-        return
-      }
-
-      const cols = Object.keys(parsed[0])
-
-      // Vérification colonnes obligatoires
-      const missing = config.requiredFields
-        .filter((f) => !cols.includes(f.csv))
-        .map((f) => f.csv)
-
-      if (missing.length > 0) {
-        setMissingRequired(missing)
-        setFileError(`Colonnes obligatoires manquantes dans le fichier`)
-        return
-      }
-
-      setFile(selected)
-      setRows(parsed)
-      setColumns(cols)
-      setStep(3)
-    } catch (err) {
-      setFileError(`Erreur de lecture : ${err.message}`)
-    }
+  if (!selected.name.endsWith('.csv')) {
+    setFileError('Le fichier doit être au format .csv')
+    return
   }
+
+  const sizeMb = selected.size / (1024 * 1024)
+  if (sizeMb > MAX_FILE_SIZE_MB) {
+    setFileError(`Le fichier dépasse ${MAX_FILE_SIZE_MB}MB`)
+    return
+  }
+
+  try {
+    // Détection du séparateur réel du fichier
+    const { delimiter: detectedDelimiter } = await detectDelimiter(selected)
+
+    // Vérification compatibilité séparateur
+    if (detectedDelimiter !== delimiter) {
+      const display = (sep) => sep === '\t' ? 'TAB' : `"${sep}"`
+      setFileError(
+        `Le séparateur choisi ${display(delimiter)} n'est pas compatible avec le fichier. ` +
+        `Le séparateur détecté dans le fichier est ${display(detectedDelimiter)}. ` +
+        `Veuillez modifier le séparateur dans la configuration.`
+      )
+      return
+    }
+
+    const parsed = await parseCsvFile(selected, delimiter)
+
+    if (parsed.length === 0) {
+      setFileError('Le fichier CSV est vide')
+      return
+    }
+
+    const cols = Object.keys(parsed[0])
+
+    // Vérification colonnes obligatoires
+    const missing = config.requiredFields
+      .filter((f) => !cols.includes(f.csv))
+      .map((f) => f.csv)
+
+    if (missing.length > 0) {
+      setMissingRequired(missing)
+      setFileError('Colonnes obligatoires manquantes dans le fichier')
+      return
+    }
+
+    setFile(selected)
+    setRows(parsed)
+    setColumns(cols)
+    setStep(3)
+  } catch (err) {
+    setFileError(`Erreur de lecture : ${err.message}`)
+  }
+}
 
   // --- Étape 4 : import ---
   const handleImport = async () => {

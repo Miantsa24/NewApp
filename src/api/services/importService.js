@@ -7,6 +7,31 @@ const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 300
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+// Détecte le séparateur réel du fichier en lisant la première ligne
+export const detectDelimiter = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const firstLine = e.target.result.split('\n')[0]
+      const candidates = [';', ',', '|', '\t']
+      let bestSep = ';'
+      let bestCount = 0
+
+      for (const sep of candidates) {
+        const count = firstLine.split(sep).length - 1
+        if (count > bestCount) {
+          bestCount = count
+          bestSep = sep
+        }
+      }
+
+      resolve({ delimiter: bestSep, count: bestCount })
+    }
+    reader.onerror = () => reject(new Error('Impossible de lire le fichier'))
+    reader.readAsText(file)
+  })
+}
+
 export const parseCsvFile = (file, delimiter = ';') => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {

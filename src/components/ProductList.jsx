@@ -12,25 +12,43 @@ const ProductList = () => {
       try {
         const data = await getAllProducts()
         const productList = data?.prestashop?.products?.product
+
+        if (!productList) {
+          setProducts([])
+          return
+        }
+
         const productsArray = Array.isArray(productList) ? productList : [productList]
+
         const productsDetails = await Promise.all(
           productsArray.map(async (product) => {
             const detail = await getProductById(product['@_id'])
             return detail?.prestashop?.product
           })
         )
-        setProducts(productsDetails)
+
+        setProducts(productsDetails.filter(Boolean))
       } catch (err) {
         setError(err.message)
+        console.error(err)
       } finally {
         setLoading(false)
       }
     }
+
     fetchProducts()
   }, [])
 
   if (loading) return <div className="loading">Chargement des produits...</div>
   if (error) return <div className="error">{error}</div>
+
+  if (products.length === 0) return (
+    <div className="empty-state">
+      <i className="ti ti-box" aria-hidden="true"></i>
+      <p>Aucun produit détecté</p>
+      <span>Importez des produits via la page Import CSV</span>
+    </div>
+  )
 
   return (
     <div className="list-container">
