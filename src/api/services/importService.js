@@ -1,16 +1,18 @@
 import Papa from 'papaparse'
 import axiosInstance from '../axiosInstance'
 import { rowToXml } from '../utils/csvToXml'
+import { MODULES_CONFIG } from '../utils/modulesConfig'
 
 const BATCH_SIZE = 10
+const BATCH_DELAY_MS = 300
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-// Parse le fichier CSV → tableau d'objets JS
-export const parseCsvFile = (file) => {
+export const parseCsvFile = (file, delimiter = ';') => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      header: true,          // première ligne = noms de colonnes
-      delimiter: ';',        // séparateur point-virgule
-      skipEmptyLines: true,  // ignore les lignes vides
+      header: true,
+      delimiter,
+      skipEmptyLines: true,
       complete: (results) => {
         if (results.errors.length > 0) {
           reject(new Error(`Erreur CSV : ${results.errors[0].message}`))
@@ -18,23 +20,21 @@ export const parseCsvFile = (file) => {
           resolve(results.data)
         }
       },
-      error: (err) => reject(err)
+      error: (err) => reject(err),
     })
   })
 }
 
-// Envoie un seul item vers PrestaShop
-const sendOne = async (row, module) => {
-  const xml = rowToXml(row, module)
-  await axiosInstance.post(`/${module}`, xml, {
-    headers: { 'Content-Type': 'application/xml' }
+const sendOne = async (row, moduleKey) => {
+  const config = MODULES_CONFIG[moduleKey]
+  if (!config) throw new Error(`Module inconnu : ${moduleKey}`)
+  const xml = rowToXml(row, moduleKey)
+  await axiosInstance.post(`/${config.apiEndpoint}`, xml, {
+    headers: { 'Content-Type': 'application/xml' },
   })
 }
 
-// Pause entre les batches pour ne pas surcharger PrestaShop
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-export const importCsv = async (rows, module, onProgress) => {
+export const importCsv = async (rows, moduleKey, onProgress) => {
   const results = { success: 0, errors: [] }
   const total = rows.length
 
@@ -44,7 +44,7 @@ export const importCsv = async (rows, module, onProgress) => {
     await Promise.all(
       batch.map(async (row, idx) => {
         try {
-          await sendOne(row, module)
+          await sendOne(row, moduleKey)
           results.success++
         } catch (err) {
           results.errors.push({
@@ -58,11 +58,8 @@ export const importCsv = async (rows, module, onProgress) => {
 
     const progress = Math.min(((i + BATCH_SIZE) / total) * 100, 100)
     onProgress(Math.round(progress), results)
-
-    // 👇 pause de 300ms entre chaque batch
-    if (i + BATCH_SIZE < total) await sleep(300)
+    if (i + BATCH_SIZE < total) await sleep(BATCH_DELAY_MS)
   }
 
   return results
-
 }

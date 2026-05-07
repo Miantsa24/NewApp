@@ -1,131 +1,103 @@
 import { useState, useRef } from 'react'
 import { parseCsvFile, importCsv } from '../api/services/importService'
+import { MODULES_CONFIG, MODULE_KEYS } from '../api/utils/modulesConfig'
 import './ImportPage.css'
 
 const MAX_FILE_SIZE_MB = 10
 const PREVIEW_ROWS = 5
+const STEPS = ['Module', 'Configuration', 'Fichier', 'Aperçu', 'Import']
 
-// Colonnes minimales requises par module
-const REQUIRED_COLUMNS = {
-  products:  ['Name *', 'Price tax excluded', 'Active (0/1)'],
-  customers: ['Last Name *', 'First Name *', 'Email *', 'Password *'],
-  orders:    ['Total paid *', 'Payment *', 'Customer ID *'],
+const MODULE_ICONS = {
+  products:     'ti-box',
+  customers:    'ti-users',
+  orders:       'ti-clipboard-list',
+  categories:   'ti-folder',
+  combinations: 'ti-adjustments',
+  stock:        'ti-package',
 }
-
-const MODULES = [
-  {
-    key: 'products',
-    label: 'Produits',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'customers',
-    label: 'Clients',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'orders',
-    label: 'Commandes',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
-    ),
-  },
-]
-
-// Étapes de l'import
-const STEPS = ['Module', 'Fichier', 'Aperçu', 'Import']
 
 const ImportPage = () => {
   const [step, setStep] = useState(0)
   const [selectedModule, setSelectedModule] = useState(null)
+  const [delimiter, setDelimiter] = useState(';')
+  const [multiDelimiter, setMultiDelimiter] = useState(',')
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState(null)
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
+  const [missingRequired, setMissingRequired] = useState([])
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState(0)
   const [report, setReport] = useState(null)
   const fileInputRef = useRef(null)
 
-  // --- Étape 1 : choix du module ---
-  const handleSelectModule = (mod) => {
-    setSelectedModule(mod)
+  const config = selectedModule ? MODULES_CONFIG[selectedModule] : null
+
+  // --- Étape 0 : choix du module ---
+  const handleSelectModule = (key) => {
+    setSelectedModule(key)
     setStep(1)
   }
 
-  // --- Étape 2 : validation et parsing du fichier ---
+  // --- Étape 2 : upload + validation ---
   const handleFileChange = async (e) => {
     const selected = e.target.files[0]
     setFileError(null)
-
+    setMissingRequired([])
     if (!selected) return
 
-    // Validation extension
     if (!selected.name.endsWith('.csv')) {
       setFileError('Le fichier doit être au format .csv')
       return
     }
 
-    // Validation taille
     const sizeMb = selected.size / (1024 * 1024)
     if (sizeMb > MAX_FILE_SIZE_MB) {
-      setFileError(`Le fichier dépasse la taille maximale de ${MAX_FILE_SIZE_MB}MB`)
+      setFileError(`Le fichier dépasse ${MAX_FILE_SIZE_MB}MB`)
       return
     }
 
     try {
-      const parsed = await parseCsvFile(selected)
+      const parsed = await parseCsvFile(selected, delimiter)
 
       if (parsed.length === 0) {
         setFileError('Le fichier CSV est vide')
         return
       }
 
-      // Validation des colonnes requises
       const cols = Object.keys(parsed[0])
-      const required = REQUIRED_COLUMNS[selectedModule.key]
-      const missing = required.filter((col) => !cols.includes(col))
+
+      // Vérification colonnes obligatoires
+      const missing = config.requiredFields
+        .filter((f) => !cols.includes(f.csv))
+        .map((f) => f.csv)
 
       if (missing.length > 0) {
-        setFileError(`Colonnes manquantes : ${missing.join(', ')}`)
+        setMissingRequired(missing)
+        setFileError(`Colonnes obligatoires manquantes dans le fichier`)
         return
       }
 
       setFile(selected)
       setRows(parsed)
       setColumns(cols)
-      setStep(2)
+      setStep(3)
     } catch (err) {
       setFileError(`Erreur de lecture : ${err.message}`)
     }
   }
 
-  // --- Étape 3 : lancer l'import ---
+  // --- Étape 4 : import ---
   const handleImport = async () => {
     setImporting(true)
     setProgress(0)
     setReport(null)
-    setStep(3)
+    setStep(4)
 
     try {
       const finalReport = await importCsv(
         rows,
-        selectedModule.key,
+        selectedModule,
         (pct) => setProgress(pct)
       )
       setReport(finalReport)
@@ -136,14 +108,17 @@ const ImportPage = () => {
     }
   }
 
-  // --- Reset complet ---
+  // --- Reset ---
   const handleReset = () => {
     setStep(0)
     setSelectedModule(null)
+    setDelimiter(';')
+    setMultiDelimiter(',')
     setFile(null)
     setFileError(null)
     setRows([])
     setColumns([])
+    setMissingRequired([])
     setImporting(false)
     setProgress(0)
     setReport(null)
@@ -156,11 +131,7 @@ const ImportPage = () => {
       {/* Header */}
       <div className="import-header">
         <div className="import-header-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
+          <i className="ti ti-upload" aria-hidden="true"></i>
         </div>
         <div>
           <h1>Import CSV</h1>
@@ -174,7 +145,7 @@ const ImportPage = () => {
           <div key={label} className={`step ${idx === step ? 'active' : ''} ${idx < step ? 'done' : ''}`}>
             <div className="step-circle">
               {idx < step
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                ? <i className="ti ti-check" style={{ fontSize: 13 }}></i>
                 : idx + 1
               }
             </div>
@@ -184,42 +155,149 @@ const ImportPage = () => {
         ))}
       </div>
 
-      {/* Contenu par étape */}
+      {/* Body */}
       <div className="import-body">
 
-        {/* Étape 0 : choix du module */}
+        {/* Étape 0 : choix module */}
         {step === 0 && (
           <div>
             <p className="step-title">Quel type de données voulez-vous importer ?</p>
-            <div className="module-cards">
-              {MODULES.map((mod) => (
-                <button key={mod.key} className="module-card" onClick={() => handleSelectModule(mod)}>
-                  <div className="module-card-icon">{mod.icon}</div>
-                  <span>{mod.label}</span>
+            <div className="module-grid">
+              {MODULE_KEYS.map((key) => (
+                <button
+                  key={key}
+                  className="module-card"
+                  onClick={() => handleSelectModule(key)}
+                >
+                  <div className="module-card-icon">
+                    <i className={`ti ${MODULE_ICONS[key]}`} aria-hidden="true"></i>
+                  </div>
+                  <span className="module-card-label">{MODULES_CONFIG[key].label}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Étape 1 : upload fichier */}
-        {step === 1 && (
+        {/* Étape 1 : configuration + champs */}
+        {step === 1 && config && (
+          <div>
+            <p className="step-title">
+              Configuration pour l'import
+              <strong> {config.label}</strong>
+            </p>
+
+            {/* Séparateurs */}
+            <div className="config-section">
+              <p className="config-section-title">
+                <i className="ti ti-settings" aria-hidden="true"></i>
+                Séparateurs
+              </p>
+              <div className="config-row">
+                <div className="config-field">
+                  <label>Séparateur de champs</label>
+                  <div className="separator-options">
+                    {[';', ',', '|', '\t'].map((sep) => (
+                      <button
+                        key={sep}
+                        className={`sep-btn ${delimiter === sep ? 'active' : ''}`}
+                        onClick={() => setDelimiter(sep)}
+                      >
+                        {sep === '\t' ? 'TAB' : sep}
+                      </button>
+                    ))}
+                    <input
+                      className="sep-custom"
+                      value={![';', ',', '|', '\t'].includes(delimiter) ? delimiter : ''}
+                      onChange={(e) => e.target.value && setDelimiter(e.target.value)}
+                      placeholder="Autre"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+                <div className="config-field">
+                  <label>Séparateur de valeurs multiples</label>
+                  <div className="separator-options">
+                    {[',', ';', '|'].map((sep) => (
+                      <button
+                        key={sep}
+                        className={`sep-btn ${multiDelimiter === sep ? 'active' : ''}`}
+                        onClick={() => setMultiDelimiter(sep)}
+                      >
+                        {sep}
+                      </button>
+                    ))}
+                    <input
+                      className="sep-custom"
+                      value={![',', ';', '|'].includes(multiDelimiter) ? multiDelimiter : ''}
+                      onChange={(e) => e.target.value && setMultiDelimiter(e.target.value)}
+                      placeholder="Autre"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Champs requis */}
+            <div className="config-section">
+              <p className="config-section-title">
+                <i className="ti ti-asterisk" style={{ color: '#ef4444' }} aria-hidden="true"></i>
+                Champs obligatoires
+              </p>
+              <div className="fields-grid">
+                {config.requiredFields.map((f) => (
+                  <div key={f.csv} className="field-item required">
+                    <div className="field-item-top">
+                      <span className="field-csv">{f.csv}</span>
+                      <span className="field-badge required-badge">Requis</span>
+                    </div>
+                    <span className="field-desc">{f.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Champs optionnels */}
+            <div className="config-section">
+              <p className="config-section-title">
+                <i className="ti ti-circle-dashed" aria-hidden="true"></i>
+                Champs optionnels
+              </p>
+              <div className="fields-grid">
+                {config.optionalFields.map((f) => (
+                  <div key={f.csv} className="field-item optional">
+                    <div className="field-item-top">
+                      <span className="field-csv">{f.csv}</span>
+                      <span className="field-badge optional-badge">Optionnel</span>
+                    </div>
+                    <span className="field-desc">{f.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="step-actions">
+              <button className="btn-back" onClick={() => setStep(0)}>← Retour</button>
+              <button className="btn-primary" onClick={() => setStep(2)}>
+                Continuer →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape 2 : upload fichier */}
+        {step === 2 && config && (
           <div>
             <p className="step-title">
               Importez votre fichier CSV pour
-              <strong> {selectedModule?.label}</strong>
+              <strong> {config.label}</strong>
             </p>
-            <div
-              className="dropzone"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
+
+            <div className="dropzone" onClick={() => fileInputRef.current?.click()}>
+              <i className="ti ti-upload" style={{ fontSize: 32, color: '#94a3b8' }} aria-hidden="true"></i>
               <p>Cliquez pour choisir un fichier CSV</p>
-              <span>Taille maximale : {MAX_FILE_SIZE_MB}MB — séparateur ;</span>
+              <span>Taille maximale : {MAX_FILE_SIZE_MB}MB — séparateur « {delimiter === '\t' ? 'TAB' : delimiter} »</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -228,30 +306,61 @@ const ImportPage = () => {
                 onChange={handleFileChange}
               />
             </div>
-            {fileError && <div className="file-error">{fileError}</div>}
-            <button className="btn-back" onClick={() => setStep(0)}>← Retour</button>
+
+            {/* Erreur fichier */}
+            {fileError && (
+              <div className="file-error">
+                <i className="ti ti-alert-circle" aria-hidden="true"></i>
+                <div>
+                  <p>{fileError}</p>
+                  {missingRequired.length > 0 && (
+                    <ul className="missing-list">
+                      {missingRequired.map((col) => (
+                        <li key={col}><code>{col}</code></li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="step-actions">
+              <button className="btn-back" onClick={() => setStep(1)}>← Retour</button>
+            </div>
           </div>
         )}
 
-        {/* Étape 2 : prévisualisation */}
-        {step === 2 && (
+        {/* Étape 3 : prévisualisation */}
+        {step === 3 && (
           <div>
-            <div className="preview-info">
-              <div className="preview-meta">
-                <span className="badge-blue">📄 {file?.name}</span>
-                <span className="badge-gray">{rows.length} lignes détectées</span>
-                <span className="badge-gray">{columns.length} colonnes</span>
-              </div>
-              <p className="step-title">Aperçu des {Math.min(PREVIEW_ROWS, rows.length)} premières lignes</p>
+            <div className="preview-meta">
+              <span className="badge-blue">
+                <i className="ti ti-file" aria-hidden="true"></i>
+                {file?.name}
+              </span>
+              <span className="badge-gray">{rows.length} lignes</span>
+              <span className="badge-gray">{columns.length} colonnes</span>
+              <span className="badge-blue">{config?.label}</span>
             </div>
+
+            <p className="step-title" style={{ margin: '1rem 0 0.75rem' }}>
+              Aperçu des {Math.min(PREVIEW_ROWS, rows.length)} premières lignes
+            </p>
+
             <div className="preview-table-wrapper">
               <table className="preview-table">
                 <thead>
                   <tr>
-                    {columns.slice(0, 6).map((col) => (
-                      <th key={col}>{col}</th>
-                    ))}
-                    {columns.length > 6 && <th>+{columns.length - 6} colonnes</th>}
+                    {columns.slice(0, 6).map((col) => {
+                      const isRequired = config?.requiredFields.some((f) => f.csv === col)
+                      return (
+                        <th key={col}>
+                          {col}
+                          {isRequired && <span className="th-required">*</span>}
+                        </th>
+                      )
+                    })}
+                    {columns.length > 6 && <th>+{columns.length - 6} cols</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -269,20 +378,25 @@ const ImportPage = () => {
                 </tbody>
               </table>
             </div>
-            <div className="preview-actions">
-              <button className="btn-back" onClick={() => setStep(1)}>← Retour</button>
-              <button className="btn-import" onClick={handleImport}>
+
+            <div className="step-actions">
+              <button className="btn-back" onClick={() => setStep(2)}>← Retour</button>
+              <button className="btn-primary" onClick={handleImport}>
+                <i className="ti ti-upload" aria-hidden="true"></i>
                 Lancer l'import ({rows.length} lignes)
               </button>
             </div>
           </div>
         )}
 
-        {/* Étape 3 : import en cours + rapport */}
-        {step === 3 && (
+        {/* Étape 4 : progression + rapport */}
+        {step === 4 && (
           <div className="import-progress-section">
             {importing ? (
               <>
+                <div className="importing-icon">
+                  <i className="ti ti-loader-2" aria-hidden="true"></i>
+                </div>
                 <p className="step-title">Import en cours...</p>
                 <div className="progress-bar-wrapper">
                   <div className="progress-bar" style={{ width: `${progress}%` }} />
@@ -293,34 +407,46 @@ const ImportPage = () => {
               <div className="report">
                 <div className={`report-summary ${report.errors.length === 0 ? 'all-success' : 'has-errors'}`}>
                   <div className="report-stat">
-                    <span className="report-number success">{report.success}</span>
-                    <span>Importés avec succès</span>
+                    <i className="ti ti-circle-check" style={{ fontSize: 28, color: '#22c55e' }} aria-hidden="true"></i>
+                    <div>
+                      <span className="report-number success">{report.success}</span>
+                      <span className="report-stat-label">Importés avec succès</span>
+                    </div>
                   </div>
+                  <div className="report-divider" />
                   <div className="report-stat">
-                    <span className="report-number error">{report.errors.length}</span>
-                    <span>Erreurs</span>
+                    <i className="ti ti-circle-x" style={{ fontSize: 28, color: '#ef4444' }} aria-hidden="true"></i>
+                    <div>
+                      <span className="report-number error">{report.errors.length}</span>
+                      <span className="report-stat-label">Erreurs</span>
+                    </div>
                   </div>
                 </div>
 
                 {report.errors.length > 0 && (
                   <div className="error-list">
-                    <p className="error-list-title">Détail des erreurs :</p>
+                    <p className="error-list-title">
+                      <i className="ti ti-alert-triangle" aria-hidden="true"></i>
+                      Détail des erreurs
+                    </p>
                     {report.errors.map((err, i) => (
                       <div key={i} className="error-item">
                         <span className="error-line">Ligne {err.line}</span>
-                        <span className="error-msg">{String(err.message).slice(0, 120)}</span>
+                        <span className="error-msg">{String(err.message).slice(0, 150)}</span>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <button className="btn-import" onClick={handleReset}>
-                  Faire un nouvel import
+                <button className="btn-primary" onClick={handleReset}>
+                  <i className="ti ti-plus" aria-hidden="true"></i>
+                  Nouvel import
                 </button>
               </div>
             )}
           </div>
         )}
+
       </div>
     </div>
   )

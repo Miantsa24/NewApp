@@ -1,28 +1,26 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Navbar from './components/Navbar'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
 import ProductList from './components/ProductList'
 import CustomersList from './components/CustomersList'
 import OrdersList from './components/OrdersList'
-import ResetPage from './pages/ResetPage'
-// import StocksList from './components/StocksList'
 import ImportPage from './pages/ImportPage'
-import './App.css'
+import ResetPage from './pages/ResetPage'
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-      <main className="main-content">
+      <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/products" />} />
+          <Route path="/" element={<Dashboard />} />
           <Route path="/products" element={<ProductList />} />
           <Route path="/customers" element={<CustomersList />} />
           <Route path="/orders" element={<OrdersList />} />
-          <Route path="/reset" element={<ResetPage />} />
-          {/* <Route path="/stocks" element={<StocksList />} /> */}
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/reset" element={<ResetPage />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
-      </main>
+      </Layout>
     </BrowserRouter>
   )
 }
