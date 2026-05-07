@@ -1,0 +1,406 @@
+.import-page {
+  max-width: 800px;
+}
+
+.import-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.import-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.import-header h1 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.import-header p {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* Stepper */
+.stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.step.active .step-circle {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+}
+
+.step.done .step-circle {
+  border-color: #22c55e;
+  background: #22c55e;
+  color: #fff;
+}
+
+.step-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.step.active .step-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.step.done .step-label {
+  color: #22c55e;
+}
+
+.step-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0 8px;
+}
+
+/* Body */
+.import-body {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.75rem;
+}
+
+.step-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+  margin: 0 0 1.25rem 0;
+}
+
+/* Module cards */
+.module-cards {
+  display: flex;
+  gap: 12px;
+}
+
+.module-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 1.5rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #0f172a;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.module-card:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.module-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.module-card:hover .module-card-icon {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed #e2e8f0;
+  border-radius: 10px;
+  padding: 2.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 1rem;
+}
+
+.dropzone:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.dropzone p {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+  margin: 0.75rem 0 0.25rem 0;
+}
+
+.dropzone span {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.file-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+/* Preview */
+.preview-info {
+  margin-bottom: 1rem;
+}
+
+.preview-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.badge-blue {
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.badge-gray {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.preview-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.preview-table th {
+  background: #f8fafc;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.preview-table td {
+  padding: 0.6rem 0.75rem;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-table tr:last-child td {
+  border-bottom: none;
+}
+
+.more-cols {
+  color: #94a3b8;
+  text-align: center;
+}
+
+.preview-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Progress */
+.import-progress-section {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.progress-bar-wrapper {
+  background: #f1f5f9;
+  border-radius: 999px;
+  height: 10px;
+  margin: 1rem 0 0.5rem 0;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.progress-label {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+/* Report */
+.report {
+  text-align: left;
+}
+
+.report-summary {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+}
+
+.all-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.has-errors {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.report-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.report-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.report-number.success { color: #16a34a; }
+.report-number.error   { color: #dc2626; }
+
+.error-list {
+  margin-bottom: 1.5rem;
+}
+
+.error-list-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 0.75rem 0;
+}
+
+.error-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.82rem;
+}
+
+.error-line {
+  font-weight: 600;
+  color: #dc2626;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.error-msg {
+  color: #64748b;
+}
+
+/* Boutons */
+.btn-back {
+  background: none;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-back:hover {
+  background: #f8fafc;
+}
+
+.btn-import {
+  background: #3b82f6;
+  border: none;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 9px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-import:hover {
+  background: #2563eb;
+}

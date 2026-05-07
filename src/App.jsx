@@ -5,6 +5,7 @@ import CustomersList from './components/CustomersList'
 import OrdersList from './components/OrdersList'
 import ResetPage from './pages/ResetPage'
 // import StocksList from './components/StocksList'
+import ImportPage from './pages/ImportPage'
 import './App.css'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/orders" element={<OrdersList />} />
           <Route path="/reset" element={<ResetPage />} />
           {/* <Route path="/stocks" element={<StocksList />} /> */}
+          <Route path="/import" element={<ImportPage />} />
         </Routes>
       </main>
     </BrowserRouter>
