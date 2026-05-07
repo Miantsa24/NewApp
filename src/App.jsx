@@ -1,26 +1,32 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Navbar from './components/Navbar'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
 import ProductList from './components/ProductList'
+import CategoriesList from './components/CategoriesList'
+import CombinationsList from './components/CombinationsList'
+import StockList from './components/StockList'
 import CustomersList from './components/CustomersList'
 import OrdersList from './components/OrdersList'
+import ImportPage from './pages/ImportPage'
 import ResetPage from './pages/ResetPage'
-// import StocksList from './components/StocksList'
-import './App.css'
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-      <main className="main-content">
+      <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/products" />} />
-          <Route path="/products" element={<ProductList />} />
-          <Route path="/customers" element={<CustomersList />} />
-          <Route path="/orders" element={<OrdersList />} />
-          <Route path="/reset" element={<ResetPage />} />
-          {/* <Route path="/stocks" element={<StocksList />} /> */}
+          <Route path="/"             element={<Dashboard />} />
+          <Route path="/products"     element={<ProductList />} />
+          <Route path="/categories"   element={<CategoriesList />} />
+          <Route path="/combinations" element={<CombinationsList />} />
+          <Route path="/stock"        element={<StockList />} />
+          <Route path="/customers"    element={<CustomersList />} />
+          <Route path="/orders"       element={<OrdersList />} />
+          <Route path="/import"       element={<ImportPage />} />
+          <Route path="/reset"        element={<ResetPage />} />
+          <Route path="*"             element={<Navigate to="/" />} />
         </Routes>
-      </main>
+      </Layout>
     </BrowserRouter>
   )
 }
