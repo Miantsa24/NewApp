@@ -1,43 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllProducts, getProductById } from '../api/services/productService'
+import useEnrichedProducts from '../hooks/useEnrichedProducts'
 import './List.css'
 
 const ProductList = () => {
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const data = await getAllProducts()
-        const productList = data?.prestashop?.products?.product
-
-        if (!productList) {
-          setProducts([])
-          return
-        }
-
-        const productsArray = Array.isArray(productList) ? productList : [productList]
-
-        const productsDetails = await Promise.all(
-          productsArray.map(async (product) => {
-            const detail = await getProductById(product['@_id'])
-            return detail?.prestashop?.product
-          })
-        )
-
-        setProducts(productsDetails.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProducts()
-  }, [])
+  const { products, loading, error } = useEnrichedProducts()
 
   if (loading) return <div className="loading">Chargement des produits...</div>
   if (error) return <div className="error">{error}</div>
@@ -60,20 +25,49 @@ const ProductList = () => {
         <thead>
           <tr>
             <th>ID</th>
+            <th>Image</th>
             <th>Nom</th>
-            <th>Prix</th>
+            <th>Catégorie parente</th>
+            <th>Catégorie</th>
+            <th>Référence</th>
+            <th>Prix HT</th>
+            <th>Prix TTC</th>
+            <th>Quantité</th>
             <th>État</th>
           </tr>
         </thead>
         <tbody>
           {products.map((product) => (
-            <tr key={product['@_id'] || product?.id}>
-              <td className="id-cell">#{product?.id}</td>
-              <td className="name-cell">{product?.name?.language?.['#text'] || '—'}</td>
-              <td className="price-cell">{parseFloat(product?.price).toFixed(2)} €</td>
+            <tr key={product.id}>
+              <td className="id-cell">#{product.id}</td>
               <td>
-                <span className={`status ${product?.active == 1 ? 'status-active' : 'status-inactive'}`}>
-                  {product?.active == 1 ? 'Actif' : 'Inactif'}
+                {product.imageUrl ? (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="product-thumb"
+                    onError={(e) => { e.target.style.display = 'none' }}
+                  />
+                ) : (
+                  <div className="product-thumb-placeholder">
+                    <i className="ti ti-photo" aria-hidden="true"></i>
+                  </div>
+                )}
+              </td>
+              <td className="name-cell">{product.name}</td>
+              <td className="date-cell">{product.categoryParent}</td>
+              <td className="date-cell">{product.categoryDefault}</td>
+              <td className="date-cell">{product.reference}</td>
+              <td className="price-cell">{product.priceHT} Ar</td>
+              <td className="price-cell">{product.priceTTC} Ar</td>
+              <td>
+                <span className={`status ${product.quantity > 0 ? 'status-active' : 'status-inactive'}`}>
+                  {product.quantity}
+                </span>
+              </td>
+              <td>
+                <span className={`status ${product.active == 1 ? 'status-active' : 'status-inactive'}`}>
+                  {product.active == 1 ? 'Actif' : 'Inactif'}
                 </span>
               </td>
             </tr>

@@ -1,45 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllCustomers, getCustomerById } from '../api/services/customersService'
+import useEnrichedCustomers from '../hooks/useEnrichedCustomers'
 import './List.css'
 
 const CustomersList = () => {
-  const [customers, setCustomers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        const data = await getAllCustomers()
-        const customerList = data?.prestashop?.customers?.customer
-
-        // Aucun client trouvé
-        if (!customerList) {
-          setCustomers([])
-          return
-        }
-
-        const customersArray = Array.isArray(customerList) ? customerList : [customerList]
-
-        const customersDetails = await Promise.all(
-          customersArray.map(async (customer) => {
-            const detail = await getCustomerById(customer['@_id'])
-            return detail?.prestashop?.customer
-          })
-        )
-
-        // Filtrer les résultats undefined
-        setCustomers(customersDetails.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchCustomers()
-  }, [])
+  const { customers, loading, error } = useEnrichedCustomers()
 
   if (loading) return <div className="loading">Chargement des clients...</div>
   if (error) return <div className="error">{error}</div>
@@ -64,23 +27,46 @@ const CustomersList = () => {
             <th>ID</th>
             <th>Nom</th>
             <th>Email</th>
+            <th>Civilité</th>
+            <th>Groupe</th>
+            <th>Commandes</th>
+            <th>Adresses</th>
+            <th>Inscription</th>
             <th>État</th>
           </tr>
         </thead>
         <tbody>
           {customers.map((customer) => (
-            <tr key={customer['@_id'] || customer?.id}>
-              <td className="id-cell">#{customer?.id}</td>
+            <tr key={customer.id}>
+              <td className="id-cell">#{customer.id}</td>
               <td className="name-cell">
                 <div className="avatar">
-                  {customer?.firstname?.[0]}{customer?.lastname?.[0]}
+                  {customer.firstname?.[0]}{customer.lastname?.[0]}
                 </div>
-                {customer?.firstname} {customer?.lastname}
+                {customer.gender !== '—' ? `${customer.gender} ` : ''}
+                {customer.firstname} {customer.lastname}
               </td>
-              <td>{customer?.email}</td>
+              <td className="date-cell">{customer.email}</td>
+              <td className="date-cell">{customer.gender}</td>
               <td>
-                <span className={`status ${customer?.active == 1 ? 'status-active' : 'status-inactive'}`}>
-                  {customer?.active == 1 ? 'Actif' : 'Inactif'}
+                <span className="group-badge">{customer.group}</span>
+              </td>
+              <td className="date-cell">
+                <span className="count-badge">
+                  <i className="ti ti-shopping-cart" aria-hidden="true"></i>
+                  {customer.orderCount}
+                </span>
+              </td>
+              <td className="date-cell">
+                <span className="count-badge">
+                  <i className="ti ti-map-pin" aria-hidden="true"></i>
+                  {customer.addressCount}
+                </span>
+              </td>
+              <td className="date-cell">{customer.dateAdd}</td>
+              <td>
+                <span className={`status ${customer.active == 1 ? 'status-active' : 'status-inactive'}`}>
+                  {customer.active == 1 ? 'Actif' : 'Inactif'}
                 </span>
               </td>
             </tr>
