@@ -1,45 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllStock, getStockById } from '../api/services/stockService'
+import useEnrichedStock from '../hooks/useEnrichedStock'
 import './List.css'
 
-const getVal = (field) => {
-  if (field === null || field === undefined) return '—'
-  if (typeof field === 'object') {
-    if (field['#text'] !== undefined) return field['#text']
-    return '—'
-  }
-  return field
-}
-
 const StockList = () => {
-  const [stock, setStock] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchStock = async () => {
-      try {
-        const data = await getAllStock()
-        const list = data?.prestashop?.stock_availables?.stock_available
-
-        if (!list) { setStock([]); return }
-
-        const arr = Array.isArray(list) ? list : [list]
-        const details = await Promise.all(
-          arr.map(async (s) => {
-            const detail = await getStockById(s['@_id'])
-            return detail?.prestashop?.stock_available
-          })
-        )
-        setStock(details.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchStock()
-  }, [])
+  const { stock, loading, error } = useEnrichedStock()
 
   if (loading) return <div className="loading">Chargement du stock...</div>
   if (error) return <div className="error">{error}</div>
@@ -62,23 +25,38 @@ const StockList = () => {
         <thead>
           <tr>
             <th>ID</th>
-            <th>Produit ID</th>
+            <th>Produit</th>
+            <th>Référence</th>
+            <th>Déclinaison</th>
             <th>Quantité</th>
-            <th>Dépend du stock</th>
+            <th>Statut</th>
           </tr>
         </thead>
         <tbody>
           {stock.map((s) => (
-            <tr key={getVal(s?.id)}>
-              <td className="id-cell">#{getVal(s?.id)}</td>
-              <td>#{getVal(s?.id_product)}</td>
+            <tr key={s.id}>
+              <td className="id-cell">#{s.id}</td>
+              <td className="name-cell">{s.productName}</td>
+              <td className="date-cell">{s.productReference}</td>
+              <td className="date-cell">
+                {s.combinationRef
+                  ? <span className="group-badge">{s.combinationRef}</span>
+                  : '—'
+                }
+              </td>
               <td>
-                <span className={`status ${getVal(s?.quantity) > 0 ? 'status-active' : 'status-inactive'}`}>
-                  {getVal(s?.quantity)}
+                <span className={`stock-qty ${s.outOfStock ? 'stock-out' : s.lowStock ? 'stock-low' : 'stock-ok'}`}>
+                  {s.quantity}
                 </span>
               </td>
-              <td className="date-cell">
-                {getVal(s?.depends_on_stock) == 1 ? 'Oui' : 'Non'}
+              <td>
+                {s.outOfStock ? (
+                  <span className="status status-inactive">Rupture</span>
+                ) : s.lowStock ? (
+                  <span className="status status-warning">Stock faible</span>
+                ) : (
+                  <span className="status status-active">Disponible</span>
+                )}
               </td>
             </tr>
           ))}

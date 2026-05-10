@@ -1,36 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllCategories, getCategoryById } from '../api/services/categoriesService'
+import useEnrichedCategories from '../hooks/useEnrichedCategories'
 import './List.css'
 
 const CategoriesList = () => {
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await getAllCategories()
-        const list = data?.prestashop?.categories?.category
-
-        if (!list) { setCategories([]); return }
-
-        const arr = Array.isArray(list) ? list : [list]
-        const details = await Promise.all(
-          arr.map(async (cat) => {
-            const detail = await getCategoryById(cat['@_id'])
-            return detail?.prestashop?.category
-          })
-        )
-        setCategories(details.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchCategories()
-  }, [])
+  const { categories, loading, error } = useEnrichedCategories()
 
   if (loading) return <div className="loading">Chargement des catégories...</div>
   if (error) return <div className="error">{error}</div>
@@ -53,27 +25,50 @@ const CategoriesList = () => {
         <thead>
           <tr>
             <th>ID</th>
-            <th>Nom</th>
+            <th>Catégorie</th>
+            <th>Catégorie parente</th>
+            <th>Produits</th>
             <th>Description</th>
             <th>État</th>
           </tr>
         </thead>
         <tbody>
           {categories.map((cat) => (
-            <tr key={cat?.id}>
-              <td className="id-cell">#{cat?.id}</td>
+            <tr
+              key={cat.id}
+              className={cat.isTopLevel ? 'row-parent' : 'row-child'}
+            >
+              <td className="id-cell">#{cat.id}</td>
               <td className="name-cell">
-                {cat?.name?.language?.['#text'] || cat?.name?.language || '—'}
+                {cat.isTopLevel ? (
+                  // Catégorie parent → icône dossier plein + fond coloré
+                  <span className="cat-parent-label">
+                    <i className="ti ti-folder-filled" aria-hidden="true"></i>
+                    {cat.name}
+                  </span>
+                ) : (
+                  // Catégorie enfant → indentation + icône
+                  <span className="cat-child-label">
+                    <i className="ti ti-corner-down-right" aria-hidden="true"></i>
+                    {cat.name}
+                  </span>
+                )}
               </td>
               <td className="date-cell">
-                {cat?.description?.language?.['#text']
-                  ? String(cat.description.language['#text']).replace(/<[^>]+>/g, '').slice(0, 60) + '...'
-                  : '—'
-                }
+                {cat.parentName !== '—' ? (
+                  <span className="cat-parent-ref">{cat.parentName}</span>
+                ) : '—'}
               </td>
               <td>
-                <span className={`status ${cat?.active == 1 ? 'status-active' : 'status-inactive'}`}>
-                  {cat?.active == 1 ? 'Active' : 'Inactive'}
+                <span className="count-badge">
+                  <i className="ti ti-box" aria-hidden="true"></i>
+                  {cat.productCount}
+                </span>
+              </td>
+              <td className="date-cell">{cat.description}</td>
+              <td>
+                <span className={`status ${cat.active == 1 ? 'status-active' : 'status-inactive'}`}>
+                  {cat.active == 1 ? 'Active' : 'Inactive'}
                 </span>
               </td>
             </tr>

@@ -1,46 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllCombinations, getCombinationById } from '../api/services/combinationsService'
+import useEnrichedCombinations from '../hooks/useEnrichedCombinations'
 import './List.css'
 
-// Extrait la valeur d'un champ qui peut être un objet xlink ou une valeur simple
-const getVal = (field) => {
-  if (field === null || field === undefined) return '—'
-  if (typeof field === 'object') {
-    if (field['#text'] !== undefined) return field['#text']
-    return '—'
-  }
-  return field
-}
-
 const CombinationsList = () => {
-  const [combinations, setCombinations] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchCombinations = async () => {
-      try {
-        const data = await getAllCombinations()
-        const list = data?.prestashop?.combinations?.combination
-
-        if (!list) { setCombinations([]); return }
-
-        const arr = Array.isArray(list) ? list : [list]
-        const details = await Promise.all(
-          arr.map(async (combo) => {
-            const detail = await getCombinationById(combo['@_id'])
-            return detail?.prestashop?.combination
-          })
-        )
-        setCombinations(details.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchCombinations()
-  }, [])
+  const { combinations, loading, error } = useEnrichedCombinations()
 
   if (loading) return <div className="loading">Chargement des déclinaisons...</div>
   if (error) return <div className="error">{error}</div>
@@ -63,19 +25,50 @@ const CombinationsList = () => {
         <thead>
           <tr>
             <th>ID</th>
-            <th>Produit ID</th>
+            <th>Produit parent</th>
             <th>Référence</th>
-            <th>Prix impact</th>
+            <th>Attributs</th>
+            <th>Impact prix</th>
+            <th>Prix final</th>
+            <th>Stock</th>
+            <th>Statut</th>
           </tr>
         </thead>
         <tbody>
           {combinations.map((combo) => (
-            <tr key={combo?.id}>
-              <td className="id-cell">#{getVal(combo?.id)}</td>
-              <td>#{getVal(combo?.id_product)}</td>
-              <td>{getVal(combo?.reference)}</td>
-              <td className="price-cell">
-                {combo?.price ? `${parseFloat(getVal(combo.price)).toFixed(2)} €` : '—'}
+            <tr key={combo.id}>
+              <td className="id-cell">#{combo.id}</td>
+              <td className="name-cell">
+                <div>
+                  <p style={{ margin: 0, fontWeight: 500 }}>{combo.productName}</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
+                    {combo.productReference}
+                  </p>
+                </div>
+              </td>
+              <td className="date-cell">{combo.reference}</td>
+              <td>
+                {combo.attributeLabel !== '—' ? (
+                  <span className="attribute-badge">{combo.attributeLabel}</span>
+                ) : '—'}
+              </td>
+              <td className={`price-cell ${combo.priceImpact.startsWith('+') ? 'price-positive' : 'price-negative'}`}>
+                {combo.priceImpact} Ar
+              </td>
+              <td className="price-cell">{combo.finalPrice} Ar</td>
+              <td>
+                <span className={`stock-qty ${combo.outOfStock ? 'stock-out' : combo.lowStock ? 'stock-low' : 'stock-ok'}`}>
+                  {combo.quantity}
+                </span>
+              </td>
+              <td>
+                {combo.outOfStock ? (
+                  <span className="status status-inactive">Rupture</span>
+                ) : combo.lowStock ? (
+                  <span className="status status-warning">Stock faible</span>
+                ) : (
+                  <span className="status status-active">Disponible</span>
+                )}
               </td>
             </tr>
           ))}

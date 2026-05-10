@@ -1,43 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getAllOrders, getOrderById } from '../api/services/ordersService'
+import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import './List.css'
 
 const OrdersList = () => {
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const data = await getAllOrders()
-        const ordersList = data?.prestashop?.orders?.order
-
-        if (!ordersList) {
-          setOrders([])
-          return
-        }
-
-        const ordersArray = Array.isArray(ordersList) ? ordersList : [ordersList]
-
-        const ordersDetails = await Promise.all(
-          ordersArray.map(async (order) => {
-            const detail = await getOrderById(order['@_id'])
-            return detail?.prestashop?.order
-          })
-        )
-
-        setOrders(ordersDetails.filter(Boolean))
-      } catch (err) {
-        setError(err.message)
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchOrders()
-  }, [])
+  const { orders, loading, error } = useEnrichedOrders()
 
   if (loading) return <div className="loading">Chargement des commandes...</div>
   if (error) return <div className="error">{error}</div>
@@ -61,17 +26,41 @@ const OrdersList = () => {
           <tr>
             <th>ID</th>
             <th>Référence</th>
-            <th>Total</th>
+            <th>Client</th>
+            <th>Transporteur</th>
+            <th>Total HT</th>
+            <th>Total TTC</th>
+            <th>Devise</th>
+            <th>Produits</th>
+            <th>État</th>
             <th>Date</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((order) => (
-            <tr key={order['@_id'] || order?.id}>
-              <td className="id-cell">#{order?.id}</td>
-              <td><strong>{order?.reference || '—'}</strong></td>
-              <td className="price-cell">{parseFloat(order?.total_paid).toFixed(2)} €</td>
-              <td className="date-cell">{order?.date_add?.split(' ')[0] || '—'}</td>
+            <tr key={order.id}>
+              <td className="id-cell">#{order.id}</td>
+              <td><strong>{order.reference}</strong></td>
+              <td className="name-cell">{order.customer}</td>
+              <td className="date-cell">{order.carrier}</td>
+              <td className="price-cell">{order.totalHT} Ar</td>
+              <td className="price-cell">{order.totalTTC} Ar</td>
+              <td className="date-cell">{order.currency}</td>
+              <td>
+                <span className="count-badge">
+                  <i className="ti ti-box" aria-hidden="true"></i>
+                  {order.productCount}
+                </span>
+              </td>
+              <td>
+                <span
+                  className="order-state-badge"
+                  style={{ background: `${order.stateColor}22`, color: order.stateColor, border: `0.5px solid ${order.stateColor}55` }}
+                >
+                  {order.state}
+                </span>
+              </td>
+              <td className="date-cell">{order.dateAdd}</td>
             </tr>
           ))}
         </tbody>
