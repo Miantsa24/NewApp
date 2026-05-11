@@ -1,8 +1,47 @@
+import { useState } from 'react'
 import useEnrichedOrders from '../hooks/useEnrichedOrders'
+import { updateOrderState, ORDER_STATES } from '../api/services/ordersService'
 import './List.css'
+
+// Les 3 actions disponibles
+const STATE_OPTIONS = [
+  {
+    id: ORDER_STATES.PAYMENT_ACCEPTED,
+    label: 'Paiement effectué',
+    icon: 'ti-circle-check',
+    color: '#16a34a',
+    bg: '#f0fdf4',
+    border: '#bbf7d0',
+  },
+  {
+    id: ORDER_STATES.PAYMENT_ERROR,
+    label: 'Échec paiement',
+    icon: 'ti-circle-x',
+    color: '#dc2626',
+    bg: '#fef2f2',
+    border: '#fecaca',
+  },
+  {
+    id: ORDER_STATES.CANCELLED,
+    label: 'Annulé',
+    icon: 'ti-ban',
+    color: '#64748b',
+    bg: '#f1f5f9',
+    border: '#e2e8f0',
+  },
+]
 
 const OrdersList = () => {
   const { orders, loading, error } = useEnrichedOrders()
+
+  // updatingId : id de la commande en cours de mise à jour
+  const [updatingId, setUpdatingId] = useState(null)
+  // openDropdownId : id de la commande dont le dropdown est ouvert
+  const [openDropdownId, setOpenDropdownId] = useState(null)
+  // updateError : { id, message } erreur sur une ligne
+  const [updateError, setUpdateError] = useState(null)
+  // localStates : { [orderId]: { state, stateColor } } états mis à jour localement
+  const [localStates, setLocalStates] = useState({})
 
   if (loading) return <div className="loading">Chargement des commandes...</div>
   if (error) return <div className="error">{error}</div>
@@ -14,6 +53,30 @@ const OrdersList = () => {
       <span>Importez des commandes via la page Import CSV</span>
     </div>
   )
+
+  const handleStateChange = async (orderId, stateOption) => {
+    setOpenDropdownId(null)
+    setUpdatingId(orderId)
+    setUpdateError(null)
+
+    try {
+      await updateOrderState(orderId, stateOption.id)
+
+      // Mise à jour locale immédiate sans recharger toute la liste
+      setLocalStates((prev) => ({
+        ...prev,
+        [orderId]: {
+          state: stateOption.label,
+          stateColor: stateOption.color,
+        },
+      }))
+    } catch (err) {
+      setUpdateError({ id: orderId, message: 'Erreur lors de la mise à jour' })
+      console.error(err)
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   return (
     <div className="list-container">
@@ -37,32 +100,93 @@ const OrdersList = () => {
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => (
-            <tr key={order.id}>
-              <td className="id-cell">#{order.id}</td>
-              <td><strong>{order.reference}</strong></td>
-              <td className="name-cell">{order.customer}</td>
-              <td className="date-cell">{order.carrier}</td>
-              <td className="price-cell">{order.totalHT} Ar</td>
-              <td className="price-cell">{order.totalTTC} Ar</td>
-              <td className="date-cell">{order.currency}</td>
-              <td>
-                <span className="count-badge">
-                  <i className="ti ti-box" aria-hidden="true"></i>
-                  {order.productCount}
-                </span>
-              </td>
-              <td>
-                <span
-                  className="order-state-badge"
-                  style={{ background: `${order.stateColor}22`, color: order.stateColor, border: `0.5px solid ${order.stateColor}55` }}
-                >
-                  {order.state}
-                </span>
-              </td>
-              <td className="date-cell">{order.dateAdd}</td>
-            </tr>
-          ))}
+          {orders.map((order) => {
+            const local = localStates[order.id]
+            const currentState      = local?.state      || order.state
+            const currentStateColor = local?.stateColor || order.stateColor
+            const isUpdating        = updatingId === order.id
+            const isOpen            = openDropdownId === order.id
+            const hasError          = updateError?.id === order.id
+
+            return (
+              <tr key={order.id}>
+                <td className="id-cell">#{order.id}</td>
+                <td><strong>{order.reference}</strong></td>
+                <td className="name-cell">{order.customer}</td>
+                <td className="date-cell">{order.carrier}</td>
+                <td className="price-cell">{order.totalHT} €</td>
+                <td className="price-cell">{order.totalTTC} €</td>
+                <td className="date-cell">{order.currency}</td>
+                <td>
+                  <span className="count-badge">
+                    <i className="ti ti-box" aria-hidden="true"></i>
+                    {order.productCount}
+                  </span>
+                </td>
+
+                {/* Colonne État — dropdown interactif */}
+                <td>
+                  <div className="state-cell">
+                    {isUpdating ? (
+                      // Spinner pendant la mise à jour
+                      <span className="state-updating">
+                        <i className="ti ti-loader-2 spin" aria-hidden="true"></i>
+                        Mise à jour...
+                      </span>
+                    ) : (
+                      <div className="state-dropdown-wrapper">
+                        {/* Badge cliquable */}
+                        <button
+                          className="order-state-btn"
+                          style={{
+                            background: `${currentStateColor}22`,
+                            color: currentStateColor,
+                            border: `0.5px solid ${currentStateColor}55`,
+                          }}
+                          onClick={() => setOpenDropdownId(isOpen ? null : order.id)}
+                        >
+                          {currentState}
+                          <i className="ti ti-chevron-down" aria-hidden="true"></i>
+                        </button>
+
+                        {/* Dropdown */}
+                        {isOpen && (
+                          <div className="state-dropdown">
+                            <p className="state-dropdown-label">Changer l'état</p>
+                            {STATE_OPTIONS.map((option) => (
+                              <button
+                                key={option.id}
+                                className="state-option"
+                                style={{ color: option.color }}
+                                onClick={() => handleStateChange(order.id, option)}
+                              >
+                                <i className={`ti ${option.icon}`} aria-hidden="true"></i>
+                                {option.label}
+                              </button>
+                            ))}
+                            <button
+                              className="state-option state-option-cancel"
+                              onClick={() => setOpenDropdownId(null)}
+                            >
+                              <i className="ti ti-x" aria-hidden="true"></i>
+                              Fermer
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Erreur sur cette ligne */}
+                    {hasError && (
+                      <p className="state-error">{updateError.message}</p>
+                    )}
+                  </div>
+                </td>
+
+                <td className="date-cell">{order.dateAdd}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
