@@ -1,4 +1,5 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { logout, getCurrentUser } from '../api/services/authService'
 import './Layout.css'
 
 const NAV_ITEMS = [
@@ -6,39 +7,46 @@ const NAV_ITEMS = [
     section: 'Catalogue',
     items: [
       { to: '/',             label: 'Dashboard',    icon: 'ti-layout-dashboard', exact: true },
-      { to: '/products',     label: 'Produits',     icon: 'ti-box' },
-      { to: '/categories',   label: 'Catégories',   icon: 'ti-folder' },
-      { to: '/combinations', label: 'Déclinaisons', icon: 'ti-adjustments' },
-      { to: '/stock',        label: 'Stock',        icon: 'ti-package' },
-      { to: '/customers',    label: 'Clients',      icon: 'ti-users' },
+      // { to: '/products',     label: 'Produits',     icon: 'ti-box' },
+      // { to: '/categories',   label: 'Catégories',   icon: 'ti-folder' },
+      // { to: '/combinations', label: 'Déclinaisons', icon: 'ti-adjustments' },
+      // { to: '/stock',        label: 'Stock',        icon: 'ti-package' },
+      // { to: '/customers',    label: 'Clients',      icon: 'ti-users' },
       { to: '/orders',       label: 'Commandes',    icon: 'ti-clipboard-list' },
     ]
   },
   {
     section: 'Données',
     items: [
-      { to: '/import', label: 'Import CSV',     icon: 'ti-upload' },
-      { to: '/reset',  label: 'Réinitialiser',  icon: 'ti-refresh' },
+      { to: '/import', label: 'Import CSV',    icon: 'ti-upload' },
+      { to: '/reset',  label: 'Réinitialiser', icon: 'ti-refresh' },
     ]
   }
 ]
 
 const Layout = ({ children }) => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const user = getCurrentUser()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   const getTitle = () => {
-  const path = location.pathname
-  if (path === '/')             return 'Dashboard'
-  if (path === '/products')     return 'Produits'
-  if (path === '/categories')   return 'Catégories'
-  if (path === '/combinations') return 'Déclinaisons'
-  if (path === '/stock')        return 'Stock'
-  if (path === '/customers')    return 'Clients'
-  if (path === '/orders')       return 'Commandes'
-  if (path === '/import')       return 'Import CSV'
-  if (path === '/reset')        return 'Réinitialisation'
-  return 'NewApp'
-}
+    const path = location.pathname
+    if (path === '/')             return 'Dashboard'
+      // if (path === '/products')     return 'Produits'
+      // if (path === '/categories')   return 'Catégories'
+      // if (path === '/combinations') return 'Déclinaisons'
+      // if (path === '/stock')        return 'Stock'
+      // if (path === '/customers')    return 'Clients'
+    if (path === '/orders')       return 'Commandes'
+    if (path === '/import')       return 'Import CSV'
+    if (path === '/reset')        return 'Réinitialisation'
+    return 'NewApp'
+  }
 
   return (
     <div className="layout">
@@ -87,7 +95,24 @@ const Layout = ({ children }) => {
             <div className="topbar-icon-btn">
               <i className="ti ti-bell" aria-hidden="true"></i>
             </div>
-            <div className="topbar-avatar">NA</div>
+
+            {/* User info + logout */}
+            <div className="topbar-user">
+              <div className="topbar-avatar">
+                {user?.firstname?.[0]}{user?.lastname?.[0]}
+              </div>
+              <span className="topbar-username">
+                {user?.firstname} {user?.lastname}
+              </span>
+            </div>
+
+            <button
+              className="topbar-logout-btn"
+              onClick={handleLogout}
+              title="Se déconnecter"
+            >
+              <i className="ti ti-logout" aria-hidden="true"></i>
+            </button>
           </div>
         </header>
 

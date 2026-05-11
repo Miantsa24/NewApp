@@ -45,8 +45,8 @@ Les workflows représentent les **flux de données et processus** dans PrestaSho
 RÉSUMÉ PANIER:
 ├─ Produit: T-shirt bleu M
 ├─ Quantité: 1
-├─ Prix unitaire: 29,99€ (de ps_product)
-├─ Total: 29,99€
+├─ Prix unitaire: 29,99Ar (de ps_product)
+├─ Total: 29,99Ar
 └─ Status: En attente de validation
 
 ÉTAPE 5️⃣ : VALIDATION PANIER
@@ -90,7 +90,7 @@ RÉSUMÉ PANIER:
 ├─ Table: ps_range_price / ps_range_weight
 ├─ Calcul frais: Selon poids/prix et zone
 ├─ Zone: Basée sur id_country (ps_zone)
-├─ Client choisit: "Standard 3j = 7,99€"
+├─ Client choisit: "Standard 3j = 7,99Ar"
 ├─ Enregistre: id_carrier choisi
 └─ API: GET /api/carriers (voir tous)
 
@@ -104,12 +104,12 @@ RÉSUMÉ PANIER:
 └─ Panier prêt à paiement
 
 RÉSUMÉ AVANT PAIEMENT:
-├─ 🛍️  T-shirt bleu M x1      29,99€
-├─ 🚚 Frais livraison        +7,99€
-├─ 📊 Sous-total            37,98€
-├─ 🏦 Taxes (20%)            +7,60€
+├─ 🛍️  T-shirt bleu M x1      29,99Ar
+├─ 🚚 Frais livraison        +7,99Ar
+├─ 📊 Sous-total            37,98Ar
+├─ 🏦 Taxes (20%)            +7,60Ar
 ├─ ────────────────────────
-└─ 💰 TOTAL TTC             45,58€
+└─ 💰 TOTAL TTC             45,58Ar
 
 ÉTAPE 7️⃣ : CRÉATION COMMANDE (Backend)
 ├─ Client valide paiement
@@ -120,7 +120,7 @@ RÉSUMÉ AVANT PAIEMENT:
 │     ├─ id_address_delivery
 │     ├─ id_address_invoice
 │     ├─ id_carrier
-│     ├─ total_paid = 45,58€
+│     ├─ total_paid = 45,58Ar
 │     ├─ valid = 0 (pas encore validée)
 │     ├─ current_state = 1 (Attente paiement)
 │     └─ date_add = NOW()
@@ -131,7 +131,7 @@ RÉSUMÉ AVANT PAIEMENT:
 │  ├─ id_product_attribute = {id combinaison si existe}
 │  ├─ product_name = "T-shirt bleu"
 │  ├─ product_quantity = 1
-│  ├─ product_price = 29,99€
+│  ├─ product_price = 29,99Ar
 │  └─ product_quantity_in_stock = (avant réduction)
 │
 ├─ Si code promo utilisé:
@@ -147,7 +147,7 @@ RÉSUMÉ AVANT PAIEMENT:
 │
 ├─ Table: ps_order_payment (INSERT)
 │  ├─ id_order = {id_commande}
-│  ├─ amount = 45,58€
+│  ├─ amount = 45,58Ar
 │  ├─ payment_method = "Carte bancaire"
 │  ├─ transaction_id = "stripe_12345"
 │  └─ date_add = NOW()
@@ -231,11 +231,11 @@ ADMIN REÇOIT NOTIFICATION
 │  ├─ Client: John Doe
 │  ├─ Email: john@example.com
 │  ├─ Status: Paiement accepté
-│  ├─ Total: 45,58€
+│  ├─ Total: 45,58Ar
 │  └─ Date: 05/05/2026 14:30
 ├─ Détails articles:
 │  ├─ FROM ps_order_detail WHERE id_order = 12345
-│  └─ T-shirt bleu M x1 à 29,99€
+│  └─ T-shirt bleu M x1 à 29,99Ar
 └─ API: GET /api/orders/12345
 
 ÉTAPE 2️⃣ : ADMIN PRÉPARE LA COMMANDE
@@ -306,8 +306,8 @@ ADMIN REÇOIT NOTIFICATION
 │  ├─ id_order = 12345
 │  ├─ number = "2026050501" (auto)
 │  ├─ total_discount_tax_excl = 0
-│  ├─ total_paid_tax_excl = 37.98€
-│  ├─ total_paid_tax_incl = 45.58€
+│  ├─ total_paid_tax_excl = 37.98Ar
+│  ├─ total_paid_tax_incl = 45.58Ar
 │  └─ date_add = NOW()
 │
 ├─ Table: ps_order_detail (UPDATE si nécessaire)
@@ -439,14 +439,14 @@ HISTORIQUE COMPLET (de ps_order_history):
 │  ├─ Table: ps_order_slip (INSERT)
 │  │  ├─ id_order = 12345
 │  │  ├─ id_customer = {id_client}
-│  │  ├─ total_products_tax_excl = 29.99€
-│  │  ├─ total_paid_tax_incl = 35.99€ (inc TVA)
+│  │  ├─ total_products_tax_excl = 29.99Ar
+│  │  ├─ total_paid_tax_incl = 35.99Ar (inc TVA)
 │  │  ├─ conversion_rate = 1.0
 │  │  └─ date_add = NOW()
 │  │
 │  ├─ Table: ps_order_payment (INSERT)
 │  │  ├─ id_order = 12345
-│  │  ├─ amount = -35.99€ (négatif = crédit)
+│  │  ├─ amount = -35.99Ar (négatif = crédit)
 │  │  ├─ payment_method = "Remboursement"
 │  │  └─ date_add = NOW()
 │  │
@@ -454,7 +454,7 @@ HISTORIQUE COMPLET (de ps_order_history):
 │
 ├─ CAS 2: BON D'AVOIR
 │  ├─ Table: ps_order_slip (UPDATE)
-│  │  └─ amount = 35.99€ (crédit boutique)
+│  │  └─ amount = 35.99Ar (crédit boutique)
 │  │
 │  ├─ Client peut utiliser comme code promo
 │  └─ Crédit visible dans son compte
@@ -466,7 +466,7 @@ HISTORIQUE COMPLET (de ps_order_history):
 │
 ├─ Email client final:
 │  ├─ Objet: "Votre remboursement a été traité"
-│  ├─ Montant: 35.99€
+│  ├─ Montant: 35.99Ar
 │  ├─ Moyen: Remboursement carte bancaire
 │  ├─ Délai: "3-5 jours ouvrables"
 │  └─ Merci pour votre achat
@@ -545,7 +545,7 @@ ALERTE DÉCLENCHÉ:
 │  ├─ quantity_expected = 200
 │  ├─ quantity_received = 0
 │  ├─ date_expected = "2026-05-12"
-│  └─ unit_price_te = 10.00€
+│  └─ unit_price_te = 10.00Ar
 │
 ├─ Table: ps_supply_order_state (INSERT)
 │  ├─ status = 1 (Commande créée)
@@ -652,15 +652,15 @@ STOCK FINAL:
 
 ```
 SITUATION:
-├─ Produit: Laptop (Prix normal: 1000€)
+├─ Produit: Laptop (Prix normal: 1000Ar)
 ├─ Client: Pierre Dupont (VIP depuis 2 ans)
 ├─ Client dans groupe: "VIP" (10% remise)
 └─ Date: Vendredi 10 mai (Black Friday)
 
 ÉTAPE 1️⃣ : CONSULTATION PRODUIT
-├─ Front: Affiche le prix 1000€
+├─ Front: Affiche le prix 1000Ar
 ├─ Backend calcul:
-│  ├─ Prix de base: ps_product.price = 1000€
+│  ├─ Prix de base: ps_product.price = 1000Ar
 │  ├─ Check: ps_specific_price
 │  │  └─ WHERE id_product = laptop
 │  │  └─ WHERE id_customer = NULL (global)
@@ -677,9 +677,9 @@ REMISE GROUPE VIP APPLIQUÉE:
 │  ├─ reduction_type = "percentage"
 │  └─ price = NULL (remise %)
 │
-├─ Calcul: 1000€ × (1 - 10%) = 900€
-├─ Affichage: 900€ (remise appliquée)
-└─ Client voir: "Votre prix VIP: 900€ au lieu de 1000€"
+├─ Calcul: 1000Ar × (1 - 10%) = 900Ar
+├─ Affichage: 900Ar (remise appliquée)
+└─ Client voir: "Votre prix VIP: 900Ar au lieu de 1000Ar"
 
 ÉTAPE 2️⃣ : PROMO BLACK FRIDAY
 ├─ Le site lance aussi une promo Black Friday
@@ -695,13 +695,13 @@ REMISE GROUPE VIP APPLIQUÉE:
 └─ Visible en front: Bouton "Ajouter code promo"
 
 ÉTAPE 3️⃣ : PANIER & APPLICATION CODES
-├─ Pierre ajoute Laptop: 900€ (prix VIP déjà appliqué)
+├─ Pierre ajoute Laptop: 900Ar (prix VIP déjà appliqué)
 ├─ Panier:
 │  ├─ ps_cart (id_cart = 123)
 │  └─ ps_cart_detail
 │     ├─ id_product = laptop
 │     ├─ quantity = 1
-│     ├─ price = 900€ (déjà inclus)
+│     ├─ price = 900Ar (déjà inclus)
 │     └─ date_add = NOW()
 │
 ├─ Pierre code: "BLACK15"
@@ -713,47 +713,47 @@ REMISE GROUPE VIP APPLIQUÉE:
 │  └─ S'applique: Électronique ✓
 │
 ├─ CALCUL REMISE SUPPLÉMENTAIRE:
-│  ├─ Prix après remise VIP: 900€
-│  ├─ Black Friday -15%: 900€ × 15% = 135€
-│  └─ Nouveau total: 900€ - 135€ = 765€
+│  ├─ Prix après remise VIP: 900Ar
+│  ├─ Black Friday -15%: 900Ar × 15% = 135Ar
+│  └─ Nouveau total: 900Ar - 135Ar = 765Ar
 │
 ├─ Table: ps_order_cart_rule (si commande)
 │  ├─ id_cart_rule = {BLACK15}
 │  ├─ name = "Black Friday -15%"
-│  ├─ value = 135€
+│  ├─ value = 135Ar
 │  └─ free_shipping = 0
 │
 └─ Affichage panier:
-   ├─ Laptop (VIP): 900€
-   ├─ - Remise VIP: -0€ (déjà dans le prix)
-   ├─ - Code BLACK15: -135€
-   ├─ = Montant final: 765€
-   └─ Économies: 235€ (23.5%)
+   ├─ Laptop (VIP): 900Ar
+   ├─ - Remise VIP: -0Ar (déjà dans le prix)
+   ├─ - Code BLACK15: -135Ar
+   ├─ = Montant final: 765Ar
+   └─ Économies: 235Ar (23.5%)
 
 ÉTAPE 4️⃣ : COMMANDE CRÉÉE
 ├─ Pierre valide la commande
 ├─ Table: ps_orders (INSERT)
-│  ├─ total_paid = 765€
+│  ├─ total_paid = 765Ar
 │  └─ valid = 1
 │
 ├─ Table: ps_order_detail (INSERT)
-│  ├─ product_price = 900€ (prix VIP vendu)
+│  ├─ product_price = 900Ar (prix VIP vendu)
 │  ├─ product_quantity = 1
-│  └─ product_total = 900€
+│  └─ product_total = 900Ar
 │
 ├─ Table: ps_order_cart_rule (INSERT)
 │  ├─ id_order = {id}
 │  ├─ id_cart_rule = {BLACK15}
 │  ├─ name = "Black Friday"
-│  └─ value = 135€
+│  └─ value = 135Ar
 │
 └─ Historique remises complet
 
 PRIX FINAUX:
-├─ Prix affiché: 1000€ (public)
-├─ Prix VIP (groupe): 900€ (-100€)
-├─ Prix Black Friday: 765€ (-135€ supplémentaires)
-├─ Total économies: -235€
+├─ Prix affiché: 1000Ar (public)
+├─ Prix VIP (groupe): 900Ar (-100Ar)
+├─ Prix Black Friday: 765Ar (-135Ar supplémentaires)
+├─ Total économies: -235Ar
 └─ Taux remise: 23.5%
 
 ÉTAPE 5️⃣ : BONUS - RÈGLE DE PRIX DYNAMIQUE
@@ -767,15 +767,15 @@ PRIX FINAUX:
 │     └─ active = 1
 │
 ├─ Calcul avec quantité:
-│  ├─ Prix unitaire: 900€ (VIP)
+│  ├─ Prix unitaire: 900Ar (VIP)
 │  ├─ Quantité: 3
 │  ├─ Remise qty: -20% supplémentaire
-│  ├─ Nouveau: 900€ × 0.8 = 720€/unité
-│  ├─ Total: 720€ × 3 = 2160€
-│  ├─ Black Friday -15%: 2160€ × 0.15 = 324€
-│  └─ Montant final: 1836€
+│  ├─ Nouveau: 900Ar × 0.8 = 720Ar/unité
+│  ├─ Total: 720Ar × 3 = 2160Ar
+│  ├─ Black Friday -15%: 2160Ar × 0.15 = 324Ar
+│  └─ Montant final: 1836Ar
 │
-└─ Économies totales: 1000€ × 3 - 1836€ = 1164€ (38.8%)
+└─ Économies totales: 1000Ar × 3 - 1836Ar = 1164Ar (38.8%)
 ```
 
 ---
