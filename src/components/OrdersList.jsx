@@ -114,8 +114,8 @@ const OrdersList = () => {
                 <td><strong>{order.reference}</strong></td>
                 <td className="name-cell">{order.customer}</td>
                 <td className="date-cell">{order.carrier}</td>
-                <td className="price-cell">{order.totalHT} €</td>
-                <td className="price-cell">{order.totalTTC} €</td>
+                <td className="price-cell">{order.totalHT} Ar</td>
+                <td className="price-cell">{order.totalTTC} Ar</td>
                 <td className="date-cell">{order.currency}</td>
                 <td>
                   <span className="count-badge">

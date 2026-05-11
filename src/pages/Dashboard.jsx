@@ -72,7 +72,7 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="stat-value">{loading ? '...' : stats.totalOrders}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.totalRevenue} € total`}</div>
+          <div className="stat-sub">{loading ? '' : `${stats.totalRevenue} Ar total`}</div>
         </div>
 
         <div className="stat-card stat-red" onClick={() => navigate('/stock')} style={{ cursor: 'pointer' }}>
@@ -119,7 +119,7 @@ const Dashboard = () => {
                   <tr key={order.id}>
                     <td><strong>{order.reference}</strong></td>
                     <td>{order.customer}</td>
-                    <td className="price">{order.totalTTC} €</td>
+                    <td className="price">{order.totalTTC} Ar</td>
                     <td>
                       <span
                         className="order-state-badge"
@@ -256,8 +256,8 @@ const Dashboard = () => {
                   </td>
                   <td className="name">{p.name}</td>
                   <td className="muted">{p.categoryDefault}</td>
-                  <td className="price">{p.priceHT} €</td>
-                  <td className="price">{p.priceTTC} €</td>
+                  <td className="price">{p.priceHT} Ar</td>
+                  <td className="price">{p.priceTTC} Ar</td>
                   <td>
                     <span className={`stock-qty ${p.quantity <= 0 ? 'stock-out' : p.quantity <= 5 ? 'stock-low' : 'stock-ok'}`}>
                       {p.quantity}
