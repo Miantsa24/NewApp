@@ -1,3 +1,5 @@
+// src/api/utils/modulesConfig.js
+
 export const MODULES_CONFIG = {
   products: {
     label: 'Produits',
@@ -37,6 +39,24 @@ export const MODULES_CONFIG = {
       { csv: 'Meta description',     xml: 'meta_description',  desc: 'Description SEO' },
       { csv: 'URL rewritten',        xml: 'link_rewrite',      desc: 'URL simplifiée' },
     ],
+
+    // ==================== SECTION RESET ====================
+    reset: {
+      order: 5,
+      mainEndpoint: 'products',
+      label: 'Produits',
+      countEndpoint: 'products',
+      subEntities: [
+        { key: 'images',                       label: 'Images',                        endpoint: 'images' },
+        { key: 'combinations',                 label: 'Combinations',                 endpoint: 'combinations' },
+        { key: 'product_customization_fields', label: 'Product Customization Fields', endpoint: 'product_customization_fields' },
+        { key: 'product_option_values',        label: 'Product Option Values',        endpoint: 'product_option_values' },
+        { key: 'product_options',              label: 'Product Options',              endpoint: 'product_options' },
+        { key: 'product_feature_values',       label: 'Product Feature Values',       endpoint: 'product_feature_values' },
+        { key: 'product_suppliers',            label: 'Product Suppliers',            endpoint: 'product_suppliers' },
+        { key: 'products_features',            label: 'Products Features',            endpoint: 'products_features' },
+      ]
+    }
   },
 
   customers: {
@@ -59,6 +79,21 @@ export const MODULES_CONFIG = {
       { csv: 'Opt-in (0/1)',                          xml: 'optin',            desc: 'Opt-in partenaires' },
       { csv: 'Default group ID',                      xml: 'id_default_group', desc: 'Groupe par défaut' },
     ],
+
+    reset: {
+      order: 2,
+      mainEndpoint: 'customers',
+      label: 'Clients',
+      countEndpoint: 'customers',
+      subEntities: [
+        { key: 'addresses',           label: 'Addresses',             endpoint: 'addresses' },
+        { key: 'customer_threads',    label: 'Customer Threads',      endpoint: 'customer_threads' },
+        { key: 'customers_messages',  label: 'Customer Messages',     endpoint: 'customer_messages' },
+        { key: 'carts',               label: 'Carts',                 endpoint: 'carts' },
+        { key: 'cart_rules',          label: 'Cart Rules',            endpoint: 'cart_rules' },
+        { key: 'guests',              label: 'Guests',                endpoint: 'guests' },
+      ]
+    }
   },
 
   orders: {
@@ -76,6 +111,23 @@ export const MODULES_CONFIG = {
       { csv: 'Currency ID *',   xml: 'id_currency',  desc: 'ID de la devise' },
       { csv: 'Language ID *',   xml: 'id_lang',      desc: 'ID de la langue' },
     ],
+
+    reset: {
+      order: 1,
+      mainEndpoint: 'orders',
+      label: 'Commandes',
+      countEndpoint: 'orders',
+      subEntities: [
+        { key: 'order_carriers',      label: 'Order Carriers',        endpoint: 'order_carriers' },
+        { key: 'order_cart_rules',    label: 'Order Cart Rules',      endpoint: 'order_cart_rules' },
+        { key: 'order_details',       label: 'Order Details',         endpoint: 'order_details' },
+        { key: 'order_histories',     label: 'Order Histories',       endpoint: 'order_histories' },
+        { key: 'order_invoices',      label: 'Order Invoices',        endpoint: 'order_invoices' },
+        { key: 'order_payments',      label: 'Order Payments',        endpoint: 'order_payments' },
+        { key: 'order_slip',          label: 'Order Slip',            endpoint: 'order_slip' },
+        { key: 'order_states',        label: 'Order States',          endpoint: 'order_states' },
+      ]
+    }
   },
 
   categories: {
@@ -95,6 +147,18 @@ export const MODULES_CONFIG = {
       { csv: 'Meta description', xml: 'meta_description', desc: 'Description SEO' },
       { csv: 'URL rewritten',    xml: 'link_rewrite',     desc: 'URL simplifiée' },
     ],
+
+    reset: {
+      order: 6,
+      mainEndpoint: 'categories',
+      label: 'Catégories',
+      countEndpoint: 'categories',
+      subEntities: [
+        { key: 'tags',                        label: 'Tags',                        endpoint: 'tags' },
+        { key: 'content_management_system',   label: 'Content Management System',   endpoint: 'content_management_system' },
+      ],
+      protectedIds: ['1', '2']
+    }
   },
 
   combinations: {
@@ -114,6 +178,17 @@ export const MODULES_CONFIG = {
       { csv: 'Impact on price', xml: 'price',           desc: 'Impact sur le prix' },
       { csv: 'Quantity',        xml: 'quantity',        desc: 'Quantité' },
     ],
+
+    reset: {
+      order: 3,
+      mainEndpoint: 'combinations',
+      label: 'Déclinaisons',
+      countEndpoint: 'combinations',
+      subEntities: [
+        { key: 'stock_availables', label: 'Stock lié aux déclinaisons', endpoint: 'stock_availables' },
+      ],
+      protectedIds: []
+    }
   },
 
   stock: {
@@ -130,8 +205,96 @@ export const MODULES_CONFIG = {
       { csv: 'Depends on stock', xml: 'depends_on_stock', desc: 'Dépend du stock avancé' },
       { csv: 'Out of stock',     xml: 'out_of_stock',     desc: 'Comportement rupture' },
     ],
+
+    reset: {
+      order: 4,
+      mainEndpoint: 'stock_availables',
+      label: 'Stock',
+      countEndpoint: 'stock_availables',
+      subEntities: [
+        { key: 'stock_movements',              label: 'Stock Movements',             endpoint: 'stock_movements' },
+        { key: 'stock_movement_reasons',       label: 'Stock Movement Reasons',       endpoint: 'stock_movement_reasons' },
+        { key: 'stocks',                       label: 'Stocks',                       endpoint: 'stocks' },
+        { key: 'warehouse_product_locations',  label: 'Warehouse Product Locations',  endpoint: 'warehouse_product_locations' },
+      ]
+    }
   },
+
+  suppliers: {
+    label: 'Fournisseurs',
+    apiEndpoint: 'suppliers',
+    xmlTag: 'supplier',
+    reset: {
+      order: 7,
+      mainEndpoint: 'suppliers',
+      label: 'Fournisseurs',
+      countEndpoint: 'suppliers',
+      subEntities: [
+        { key: 'product_suppliers', label: 'Product Suppliers', endpoint: 'product_suppliers' },
+      ]
+    }
+  },
+
+  manufacturers: {
+    label: 'Marques / Fabricants',
+    apiEndpoint: 'manufacturers',
+    xmlTag: 'manufacturer',
+    reset: {
+      order: 8,
+      mainEndpoint: 'manufacturers',
+      label: 'Marques',
+      countEndpoint: 'manufacturers',
+      subEntities: []
+    }
+  },
+
+  warehouses: {
+    label: 'Entrepôts & Approvisionnement',
+    apiEndpoint: 'warehouses',
+    xmlTag: 'warehouse',
+    reset: {
+      order: 3,
+      mainEndpoint: 'warehouses',
+      label: 'Entrepôts',
+      countEndpoint: 'warehouses',
+      subEntities: [
+        { key: 'deliveries',                    label: 'Deliveries',                   endpoint: 'deliveries' },
+        { key: 'supply_orders',                 label: 'Supply Orders',                endpoint: 'supply_orders' },
+        { key: 'supply_order_details',          label: 'Supply Order Details',         endpoint: 'supply_order_details' },
+        { key: 'supply_order_histories',        label: 'Supply Order Histories',       endpoint: 'supply_order_histories' },
+      ]
+    }
+  },
+
+  taxes: {
+    label: 'Prix & Taxes',
+    apiEndpoint: 'taxes',
+    xmlTag: 'tax',
+    reset: {
+      order: 9,
+      mainEndpoint: 'taxes',
+      label: 'Taxes',
+      countEndpoint: 'taxes',
+      subEntities: [
+        { key: 'specific_prices',      label: 'Specific Prices',      endpoint: 'specific_prices' },
+        { key: 'tax_rules',            label: 'Tax Rules',            endpoint: 'tax_rules' },
+        { key: 'tax_rules_groups',     label: 'Tax Rules Groups',     endpoint: 'tax_rules_groups' },
+      ]
+    }
+  }
 }
 
+// Utilitaires exportés
 export const MODULE_KEYS = Object.keys(MODULES_CONFIG)
+
+// Retourne les modules triés par ordre de suppression (très important)
+export const getResetOrder = () => {
+  return MODULE_KEYS
+    .map(key => ({
+      key,
+      ...MODULES_CONFIG[key].reset
+    }))
+    .sort((a, b) => a.order - b.order)
+}
+
 export const TYPE_COLUMN_NAMES = ['type', 'Type', 'module', 'Module', 'entity', 'Entity']
