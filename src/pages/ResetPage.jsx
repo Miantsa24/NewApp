@@ -1,140 +1,237 @@
-import { useState } from 'react'
-import { deleteAllProducts } from '../api/services/productService'
-import { deleteAllCustomers } from '../api/services/customersService'
-import { deleteAllOrders } from '../api/services/ordersService'
-import { deleteAllCategories } from '../api/services/categoriesService'
-import { deleteAllCombinations } from '../api/services/combinationsService'
+// src/pages/ResetPage.jsx
+
+import { useState, useEffect } from 'react'
+import ResetModuleItem from '../components/ResetModuleItem'
+import { getResetStats, deleteAllSelected } from '../api/services/resetService'
+import { MODULES_CONFIG } from '../api/utils/modulesConfig'
 import './ResetPage.css'
 
-const actions = [
-  {
-    key: 'products',
-    label: 'Produits',
-    description: 'Supprimer tous les produits du catalogue',
-    fn: deleteAllProducts,
-    icon: <i className="ti ti-box" style={{ fontSize: 22 }} aria-hidden="true"></i>,
-  },
-  {
-    key: 'categories',
-    label: 'Catégories',
-    description: 'Supprimer toutes les catégories (sauf racine)',
-    fn: deleteAllCategories,
-    icon: <i className="ti ti-folder" style={{ fontSize: 22 }} aria-hidden="true"></i>,
-  },
-  {
-    key: 'combinations',
-    label: 'Déclinaisons',
-    description: 'Supprimer toutes les déclinaisons',
-    fn: deleteAllCombinations,
-    icon: <i className="ti ti-adjustments" style={{ fontSize: 22 }} aria-hidden="true"></i>,
-  },
-  {
-    key: 'customers',
-    label: 'Clients',
-    description: 'Supprimer tous les comptes clients',
-    fn: deleteAllCustomers,
-    icon: <i className="ti ti-users" style={{ fontSize: 22 }} aria-hidden="true"></i>,
-  },
-  {
-    key: 'orders',
-    label: 'Commandes',
-    description: 'Supprimer toutes les commandes',
-    fn: deleteAllOrders,
-    icon: <i className="ti ti-clipboard-list" style={{ fontSize: 22 }} aria-hidden="true"></i>,
-  },
-]
-
 const ResetPage = () => {
-  const [statuses, setStatuses] = useState({})
-  const [confirmAll, setConfirmAll] = useState(false)
+  const [stats, setStats] = useState({})
+  const [loadingStats, setLoadingStats] = useState(true)
+  
+  const [selectedModules, setSelectedModules] = useState({})
+  const [selectedSubEntities, setSelectedSubEntities] = useState({})
+  
+  const [statusPerModule, setStatusPerModule] = useState({})
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [result, setResult] = useState(null) // { success: [], errors: [] }
 
-  const handleReset = async (key, fn) => {
-    setStatuses((prev) => ({ ...prev, [key]: 'loading' }))
-    try {
-      await fn()
-      setStatuses((prev) => ({ ...prev, [key]: 'success' }))
-    } catch (err) {
-      console.error(err)
-      setStatuses((prev) => ({ ...prev, [key]: 'error' }))
+  // Chargement des statistiques au montage
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoadingStats(true)
+        const data = await getResetStats()
+        setStats(data)
+
+        // Tout cocher par défaut
+        const initialModules = {}
+        const initialSubs = {}
+
+        Object.keys(data).forEach(key => {
+          initialModules[key] = true
+          initialSubs[key] = {}
+          
+          // Cocher toutes les sous-entités par défaut
+          if (data[key].subEntities) {
+            Object.keys(data[key].subEntities).forEach(subKey => {
+              initialSubs[key][subKey] = true
+            })
+          }
+        })
+
+        setSelectedModules(initialModules)
+        setSelectedSubEntities(initialSubs)
+      } catch (err) {
+        console.error("Erreur chargement stats reset :", err)
+      } finally {
+        setLoadingStats(false)
+      }
     }
+
+    loadStats()
+  }, [])
+
+  const handleModuleToggle = (moduleKey) => {
+    setSelectedModules(prev => ({
+      ...prev,
+      [moduleKey]: !prev[moduleKey]
+    }))
+  }
+
+  const handleSubToggle = (moduleKey, subKey) => {
+    setSelectedSubEntities(prev => ({
+      ...prev,
+      [moduleKey]: {
+        ...prev[moduleKey],
+        [subKey]: !prev[moduleKey]?.[subKey]
+      }
+    }))
   }
 
   const handleResetAll = async () => {
-    for (const action of actions) {
-      await handleReset(action.key, action.fn)
+    setShowConfirm(false)
+    setIsDeleting(true)
+    setResult(null)
+    setStatusPerModule({})
+
+    try {
+      const resultData = await deleteAllSelected(selectedModules, selectedSubEntities)
+      
+      // Mise à jour des statuts
+      const newStatuses = {}
+      resultData.success.forEach(item => {
+        newStatuses[item.module] = 'success'
+      })
+      resultData.errors.forEach(item => {
+        newStatuses[item.module] = 'error'
+      })
+
+      setStatusPerModule(newStatuses)
+      setResult(resultData)
+      
+    } catch (err) {
+      console.error(err)
+      alert("Une erreur grave est survenue pendant la suppression.")
+    } finally {
+      setIsDeleting(false)
     }
-    setConfirmAll(false)
   }
 
-  const getStatusLabel = (key) => {
-    if (statuses[key] === 'loading') return <span className="status-badge loading">Suppression...</span>
-    if (statuses[key] === 'success') return <span className="status-badge success">Supprimé</span>
-    if (statuses[key] === 'error') return <span className="status-badge error">Erreur</span>
-    return null
+  const totalToDelete = Object.keys(selectedModules)
+    .filter(key => selectedModules[key])
+    .length
+
+  if (loadingStats) {
+    return <div className="reset-page loading">Chargement des statistiques...</div>
   }
 
   return (
     <div className="reset-page">
-
       <div className="reset-header">
         <div className="reset-header-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/>
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
           </svg>
         </div>
         <div>
           <h1>Réinitialisation des données</h1>
-          <p>Les suppressions sont définitives et irréversibles.</p>
+          <p>Opération irréversible. Les données seront supprimées définitivement.</p>
         </div>
       </div>
 
-      <div className="reset-cards">
-        {actions.map((action) => (
-          <div className="reset-card" key={action.key}>
-            <div className="reset-card-left">
-              <div className="reset-card-icon">{action.icon}</div>
-              <div>
-                <p className="reset-card-title">{action.label}</p>
-                <p className="reset-card-desc">{action.description}</p>
-              </div>
-            </div>
-            <div className="reset-card-right">
-              {getStatusLabel(action.key)}
-              <button
-                className="btn-delete"
-                onClick={() => handleReset(action.key, action.fn)}
-                disabled={statuses[action.key] === 'loading'}
-              >
-                {statuses[action.key] === 'loading' ? 'En cours...' : 'Supprimer'}
-              </button>
-            </div>
-          </div>
-        ))}
+      {/* Liste des modules */}
+      <div className="reset-modules-list">
+        {Object.keys(MODULES_CONFIG).map(key => {
+          const moduleStat = stats[key]
+          if (!moduleStat) return null
+
+          return (
+            <ResetModuleItem
+              key={key}
+              moduleKey={key}
+              label={moduleStat.label}
+              count={moduleStat.mainCount}
+              subEntities={moduleStat.subEntities}
+              selected={selectedModules[key]}
+              selectedSub={selectedSubEntities[key] || {}}
+              onModuleToggle={handleModuleToggle}
+              onSubToggle={handleSubToggle}
+              status={statusPerModule[key]}
+            />
+          )
+        })}
       </div>
 
+      {/* Tableau récapitulatif */}
+      <div className="reset-summary">
+        <h3>Récapitulatif avant suppression</h3>
+        <table className="summary-table">
+          <thead>
+            <tr>
+              <th>Module</th>
+              <th>Quantité principale</th>
+              <th>Sous-entités sélectionnées</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.keys(selectedModules).map(key => {
+              if (!selectedModules[key]) return null
+              const stat = stats[key]
+              const subs = selectedSubEntities[key] || {}
+              const selectedSubsCount = Object.values(subs).filter(Boolean).length
+
+              return (
+                <tr key={key}>
+                  <td><strong>{stat.label}</strong></td>
+                  <td>{stat.mainCount}</td>
+                  <td>{selectedSubsCount > 0 ? `${selectedSubsCount} sous-entités` : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Bouton Tout Supprimer */}
       <div className="reset-all-section">
-        {!confirmAll ? (
-          <button className="btn-delete-all" onClick={() => setConfirmAll(true)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        {!showConfirm ? (
+          <button 
+            className="btn-delete-all"
+            onClick={() => setShowConfirm(true)}
+            disabled={isDeleting || totalToDelete === 0}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
             </svg>
-            Tout supprimer
+            Tout supprimer ({totalToDelete} module{totalToDelete > 1 ? 's' : ''})
           </button>
         ) : (
           <div className="confirm-box">
-            <p>Confirmer la suppression de toutes les données ?</p>
+            <h3>⚠️ Confirmation finale</h3>
+            <p>Cette action est <strong>irréversible</strong>.<br />
+               Voulez-vous vraiment supprimer les données sélectionnées ?</p>
+            
             <div className="confirm-actions">
-              <button className="btn-cancel" onClick={() => setConfirmAll(false)}>Annuler</button>
-              <button className="btn-confirm-delete" onClick={handleResetAll}>Oui, tout supprimer</button>
+              <button className="btn-cancel" onClick={() => setShowConfirm(false)}>
+                Annuler
+              </button>
+              <button 
+                className="btn-confirm-delete" 
+                onClick={handleResetAll}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Suppression en cours...' : 'Oui, tout supprimer maintenant'}
+              </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* Résultat final */}
+      {result && (
+        <div className="reset-result">
+          <h3>Résultat de l'opération</h3>
+          {result.success.length > 0 && (
+            <div className="success-list">
+              <strong>✅ Supprimés avec succès :</strong>
+              <ul>{result.success.map(s => <li key={s.module}>{s.label}</li>)}</ul>
+            </div>
+          )}
+          {result.errors.length > 0 && (
+            <div className="error-list">
+              <strong>❌ Erreurs :</strong>
+              <ul>{result.errors.map(e => <li key={e.module}>{e.label} — {e.error}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
