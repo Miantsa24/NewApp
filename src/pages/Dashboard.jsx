@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useEnrichedProducts from '../hooks/useEnrichedProducts'
 import useEnrichedCustomers from '../hooks/useEnrichedCustomers'
@@ -5,273 +6,274 @@ import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import useEnrichedStock from '../hooks/useEnrichedStock'
 import './Dashboard.css'
 
+const today = new Date().toISOString().split('T')[0]
+
 const Dashboard = () => {
   const navigate = useNavigate()
+  const [searchDate, setSearchDate] = useState('')
 
   const { products, loading: loadingP } = useEnrichedProducts()
   const { customers, loading: loadingC } = useEnrichedCustomers()
-  const { orders,   loading: loadingO } = useEnrichedOrders()
-  const { stock,    loading: loadingS } = useEnrichedStock()
+  const { orders,    loading: loadingO } = useEnrichedOrders()
+  const { stock,     loading: loadingS } = useEnrichedStock()
 
   const loading = loadingP || loadingC || loadingO || loadingS
 
-  // Stats calculées depuis les données enrichies
   const stats = {
-    totalProducts:   products.length,
-    activeProducts:  products.filter(p => p.active == 1).length,
-    totalCustomers:  customers.length,
-    activeCustomers: customers.filter(c => c.active == 1).length,
-    totalOrders:     orders.length,
-    totalRevenue:    orders
-      .reduce((sum, o) => sum + parseFloat(o.totalTTC || 0), 0)
-      .toFixed(2),
-    outOfStock:      stock.filter(s => s.outOfStock).length,
-    lowStock:        stock.filter(s => s.lowStock).length,
+    totalProducts:  products.length,
+    activeProducts: products.filter(p => p.active == 1).length,
+    totalCustomers: customers.length,
+    activeCustomers:customers.filter(c => c.active == 1).length,
+    totalOrders:    orders.length,
+    totalRevenue:   orders.reduce((s, o) => s + parseFloat(o.totalTTC || 0), 0).toFixed(2),
+    outOfStock:     stock.filter(s => s.outOfStock).length,
+    lowStock:       stock.filter(s => s.lowStock).length,
   }
 
-  // 5 dernières commandes
-  const recentOrders = [...orders]
-    .sort((a, b) => new Date(b.dateAdd) - new Date(a.dateAdd))
-    .slice(0, 5)
+  // Groupement par jour
+  const ordersByDay = {}
+  orders.forEach((o) => {
+    const day = o.dateAdd || '—'
+    if (!ordersByDay[day]) ordersByDay[day] = { count: 0, total: 0, orders: [] }
+    ordersByDay[day].count += 1
+    ordersByDay[day].total += parseFloat(o.totalTTC || 0)
+    ordersByDay[day].orders.push(o)
+  })
 
-  // Top 5 produits par ordre d'apparition
-  const recentProducts = products.slice(0, 5)
+  const days = Object.entries(ordersByDay).sort((a, b) => new Date(b[0]) - new Date(a[0]))
+
+  // Commandes du jour système
+  const todayData = ordersByDay[today]
+
+  // Commandes de la date recherchée
+  const searchData = searchDate ? ordersByDay[searchDate] : null
 
   return (
     <div className="dashboard">
 
-      {/* Stats principales */}
+      {/* 4 badges */}
       <div className="stats-grid">
         <div className="stat-card stat-blue" onClick={() => navigate('/products')} style={{ cursor: 'pointer' }}>
           <div className="stat-card-top">
             <span className="stat-label">Produits</span>
-            <div className="stat-icon">
-              <i className="ti ti-box" aria-hidden="true"></i>
-            </div>
+            <div className="stat-icon"><i className="ti ti-box"></i></div>
           </div>
-          <div className="stat-value">{loading ? '...' : stats.totalProducts}</div>
+          <div className="stat-value">{loading ? '…' : stats.totalProducts}</div>
           <div className="stat-sub">{loading ? '' : `${stats.activeProducts} actifs`}</div>
         </div>
 
         <div className="stat-card stat-green" onClick={() => navigate('/customers')} style={{ cursor: 'pointer' }}>
           <div className="stat-card-top">
             <span className="stat-label">Clients</span>
-            <div className="stat-icon">
-              <i className="ti ti-users" aria-hidden="true"></i>
-            </div>
+            <div className="stat-icon"><i className="ti ti-users"></i></div>
           </div>
-          <div className="stat-value">{loading ? '...' : stats.totalCustomers}</div>
+          <div className="stat-value">{loading ? '…' : stats.totalCustomers}</div>
           <div className="stat-sub">{loading ? '' : `${stats.activeCustomers} actifs`}</div>
         </div>
 
         <div className="stat-card stat-amber" onClick={() => navigate('/orders')} style={{ cursor: 'pointer' }}>
           <div className="stat-card-top">
             <span className="stat-label">Commandes</span>
-            <div className="stat-icon">
-              <i className="ti ti-clipboard-list" aria-hidden="true"></i>
-            </div>
+            <div className="stat-icon"><i className="ti ti-clipboard-list"></i></div>
           </div>
-          <div className="stat-value">{loading ? '...' : stats.totalOrders}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.totalRevenue} Ar total`}</div>
+          <div className="stat-value">{loading ? '…' : stats.totalOrders}</div>
+          <div className="stat-sub">{loading ? '' : `${stats.totalRevenue} Ar`}</div>
         </div>
 
         <div className="stat-card stat-red" onClick={() => navigate('/stock')} style={{ cursor: 'pointer' }}>
           <div className="stat-card-top">
-            <span className="stat-label">Ruptures de stock</span>
-            <div className="stat-icon">
-              <i className="ti ti-package" aria-hidden="true"></i>
-            </div>
+            <span className="stat-label">Ruptures</span>
+            <div className="stat-icon"><i className="ti ti-package"></i></div>
           </div>
-          <div className="stat-value">{loading ? '...' : stats.outOfStock}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.lowStock} en stock faible`}</div>
+          <div className="stat-value">{loading ? '…' : stats.outOfStock}</div>
+          <div className="stat-sub">{loading ? '' : `${stats.lowStock} stock faible`}</div>
         </div>
       </div>
 
+      {/* Row principale : aujourd'hui + total par jour */}
       <div className="dashboard-row">
 
-        {/* Dernières commandes */}
+        {/* Card aujourd'hui */}
+        <div className="dash-card today-card">
+          <div className="today-header">
+            <div>
+              <p className="today-label">Aujourd'hui</p>
+              <p className="today-date">{today}</p>
+            </div>
+            <div className="today-icon">
+              <i className="ti ti-calendar-event"></i>
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="dash-empty">Chargement...</p>
+          ) : !todayData ? (
+            <p className="dash-empty">Aucune commande aujourd'hui</p>
+          ) : (
+            <>
+              <div className="today-stats">
+                <div className="today-stat">
+                  <span className="today-stat-val">{todayData.count}</span>
+                  <span className="today-stat-lbl">commandes</span>
+                </div>
+                <div className="today-stat-divider"></div>
+                <div className="today-stat">
+                  <span className="today-stat-val">{todayData.total.toFixed(2)}</span>
+                  <span className="today-stat-lbl">Ar TTC</span>
+                </div>
+              </div>
+
+              <table className="dash-mini-table" style={{ marginTop: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Réf.</th>
+                    <th>Client</th>
+                    <th>Montant</th>
+                    <th>État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayData.orders.map(o => (
+                    <tr key={o.id}>
+                      <td><strong>{o.reference}</strong></td>
+                      <td>{o.customer}</td>
+                      <td className="price">{o.totalTTC} Ar</td>
+                      <td>
+                        <span className="order-state-badge" style={{
+                          background: `${o.stateColor}22`,
+                          color: o.stateColor,
+                          border: `0.5px solid ${o.stateColor}55`
+                        }}>
+                          {o.state}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+
+        {/* Card total général par jour */}
         <div className="dash-card">
           <div className="dash-card-header">
             <p className="dash-card-title">
-              <i className="ti ti-clock" aria-hidden="true"></i>
-              Dernières commandes
+              <i className="ti ti-chart-bar"></i>
+              Par jour
             </p>
-            <button className="dash-card-link" onClick={() => navigate('/orders')}>
-              Voir tout →
-            </button>
+            <button className="dash-card-link" onClick={() => navigate('/orders')}>Voir tout →</button>
           </div>
+
           {loading ? (
             <p className="dash-empty">Chargement...</p>
-          ) : recentOrders.length === 0 ? (
+          ) : days.length === 0 ? (
             <p className="dash-empty">Aucune commande</p>
           ) : (
             <table className="dash-mini-table">
               <thead>
                 <tr>
-                  <th>Réf.</th>
-                  <th>Client</th>
-                  <th>Total</th>
-                  <th>État</th>
+                  <th>Date</th>
+                  <th>Commandes</th>
+                  <th>Montant TTC</th>
                 </tr>
               </thead>
               <tbody>
-                {recentOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td><strong>{order.reference}</strong></td>
-                    <td>{order.customer}</td>
-                    <td className="price">{order.totalTTC} Ar</td>
+                {days.map(([day, data]) => (
+                  <tr key={day} className={day === today ? 'row-today' : ''}>
                     <td>
-                      <span
-                        className="order-state-badge"
-                        style={{
-                          background: `${order.stateColor}22`,
-                          color: order.stateColor,
-                          border: `0.5px solid ${order.stateColor}55`
-                        }}
-                      >
-                        {order.state}
-                      </span>
+                      {day === today
+                        ? <span className="today-pill">Aujourd'hui</span>
+                        : day}
                     </td>
+                    <td><span className="count-badge">{data.count}</span></td>
+                    <td className="price">{data.total.toFixed(2)} Ar</td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="total-row">
+                  <td><strong>Total général</strong></td>
+                  <td><strong>{stats.totalOrders}</strong></td>
+                  <td className="price"><strong>{stats.totalRevenue} Ar</strong></td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
-
-        {/* Produits récents + actions rapides */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Alertes stock */}
-          {!loading && (stats.outOfStock > 0 || stats.lowStock > 0) && (
-            <div className="dash-card dash-alert">
-              <p className="dash-card-title">
-                <i className="ti ti-alert-triangle" style={{ color: '#f59e0b' }} aria-hidden="true"></i>
-                Alertes stock
-              </p>
-              {stats.outOfStock > 0 && (
-                <div className="alert-item alert-red">
-                  <i className="ti ti-circle-x" aria-hidden="true"></i>
-                  <span><strong>{stats.outOfStock}</strong> produit(s) en rupture de stock</span>
-                  <button className="alert-btn" onClick={() => navigate('/stock')}>Voir →</button>
-                </div>
-              )}
-              {stats.lowStock > 0 && (
-                <div className="alert-item alert-amber">
-                  <i className="ti ti-alert-circle" aria-hidden="true"></i>
-                  <span><strong>{stats.lowStock}</strong> produit(s) en stock faible</span>
-                  <button className="alert-btn" onClick={() => navigate('/stock')}>Voir →</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions rapides */}
-          <div className="dash-card">
-            <p className="dash-card-title">
-              <i className="ti ti-bolt" aria-hidden="true"></i>
-              Actions rapides
-            </p>
-            <div className="quick-actions">
-              <button className="quick-btn" onClick={() => navigate('/import')}>
-                <div className="quick-btn-icon blue">
-                  <i className="ti ti-upload" aria-hidden="true"></i>
-                </div>
-                <div>
-                  <p className="quick-btn-label">Importer un CSV</p>
-                  <p className="quick-btn-sub">Produits, clients, commandes...</p>
-                </div>
-                <i className="ti ti-chevron-right quick-btn-arrow" aria-hidden="true"></i>
-              </button>
-              <button className="quick-btn" onClick={() => navigate('/reset')}>
-                <div className="quick-btn-icon red">
-                  <i className="ti ti-refresh" aria-hidden="true"></i>
-                </div>
-                <div>
-                  <p className="quick-btn-label">Réinitialiser</p>
-                  <p className="quick-btn-sub">Supprimer toutes les données</p>
-                </div>
-                <i className="ti ti-chevron-right quick-btn-arrow" aria-hidden="true"></i>
-              </button>
-              <button className="quick-btn" onClick={() => navigate('/products')}>
-                <div className="quick-btn-icon amber">
-                  <i className="ti ti-box" aria-hidden="true"></i>
-                </div>
-                <div>
-                  <p className="quick-btn-label">Voir les produits</p>
-                  <p className="quick-btn-sub">{loading ? '...' : `${stats.totalProducts} produits`}</p>
-                </div>
-                <i className="ti ti-chevron-right quick-btn-arrow" aria-hidden="true"></i>
-              </button>
-            </div>
-          </div>
-
-        </div>
       </div>
 
-      {/* Produits récents */}
+      {/* Card recherche par date */}
       <div className="dash-card">
         <div className="dash-card-header">
           <p className="dash-card-title">
-            <i className="ti ti-box" aria-hidden="true"></i>
-            Produits récents
+            <i className="ti ti-search"></i>
+            Commandes par date
           </p>
-          <button className="dash-card-link" onClick={() => navigate('/products')}>
-            Voir tout →
-          </button>
         </div>
-        {loading ? (
-          <p className="dash-empty">Chargement...</p>
-        ) : recentProducts.length === 0 ? (
-          <p className="dash-empty">Aucun produit</p>
-        ) : (
-          <table className="dash-mini-table">
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Nom</th>
-                <th>Catégorie</th>
-                <th>Prix HT</th>
-                <th>Prix TTC</th>
-                <th>Stock</th>
-                <th>État</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentProducts.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    {p.imageUrl ? (
-                      <img
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="product-thumb"
-                        onError={(e) => { e.target.style.display = 'none' }}
-                      />
-                    ) : (
-                      <div className="product-thumb-placeholder">
-                        <i className="ti ti-photo" aria-hidden="true"></i>
-                      </div>
-                    )}
-                  </td>
-                  <td className="name">{p.name}</td>
-                  <td className="muted">{p.categoryDefault}</td>
-                  <td className="price">{p.priceHT} Ar</td>
-                  <td className="price">{p.priceTTC} Ar</td>
-                  <td>
-                    <span className={`stock-qty ${p.quantity <= 0 ? 'stock-out' : p.quantity <= 5 ? 'stock-low' : 'stock-ok'}`}>
-                      {p.quantity}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`status ${p.active == 1 ? 'status-active' : 'status-inactive'}`}>
-                      {p.active == 1 ? 'Actif' : 'Inactif'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="date-search-bar">
+          <i className="ti ti-calendar"></i>
+          <input
+            type="date"
+            value={searchDate}
+            onChange={e => setSearchDate(e.target.value)}
+            className="date-input"
+          />
+          {searchDate && (
+            <button className="date-clear" onClick={() => setSearchDate('')}>
+              <i className="ti ti-x"></i>
+            </button>
+          )}
+        </div>
+
+        {searchDate && (
+          !searchData ? (
+            <p className="dash-empty">Aucune commande le {searchDate}</p>
+          ) : (
+            <>
+              <div className="search-result-summary">
+                <span className="count-badge">{searchData.count} commande{searchData.count > 1 ? 's' : ''}</span>
+                <span className="search-total">{searchData.total.toFixed(2)} Ar TTC</span>
+              </div>
+              <table className="dash-mini-table" style={{ marginTop: 10 }}>
+                <thead>
+                  <tr>
+                    <th>Réf.</th>
+                    <th>Client</th>
+                    <th>Transporteur</th>
+                    <th>Montant HT</th>
+                    <th>Montant TTC</th>
+                    <th>État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {searchData.orders.map(o => (
+                    <tr key={o.id}>
+                      <td><strong>{o.reference}</strong></td>
+                      <td>{o.customer}</td>
+                      <td className="muted">{o.carrier}</td>
+                      <td className="price">{o.totalHT} Ar</td>
+                      <td className="price">{o.totalTTC} Ar</td>
+                      <td>
+                        <span className="order-state-badge" style={{
+                          background: `${o.stateColor}22`,
+                          color: o.stateColor,
+                          border: `0.5px solid ${o.stateColor}55`
+                        }}>
+                          {o.state}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )
+        )}
+
+        {!searchDate && (
+          <p className="dash-empty" style={{ paddingTop: 8 }}>Sélectionnez une date pour voir le détail</p>
         )}
       </div>
 

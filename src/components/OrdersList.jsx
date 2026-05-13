@@ -3,8 +3,17 @@ import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import { updateOrderState, ORDER_STATES } from '../api/services/ordersService'
 import './List.css'
 
-// Les 3 actions disponibles
+// Les 3 états disponibles dans le dropdown
 const STATE_OPTIONS = [
+  {
+    id: ORDER_STATES.IN_CART,
+    label: 'Dans le panier',
+    icon: 'ti-shopping-cart',
+    color: '#d97706',
+    bg: '#fffbeb',
+    border: '#fde68a',
+    virtual: true, // État virtuel — pas de PUT vers PrestaShop
+  },
   {
     id: ORDER_STATES.PAYMENT_ACCEPTED,
     label: 'Paiement effectué',
@@ -12,14 +21,7 @@ const STATE_OPTIONS = [
     color: '#16a34a',
     bg: '#f0fdf4',
     border: '#bbf7d0',
-  },
-  {
-    id: ORDER_STATES.PAYMENT_ERROR,
-    label: 'Échec paiement',
-    icon: 'ti-circle-x',
-    color: '#dc2626',
-    bg: '#fef2f2',
-    border: '#fecaca',
+    virtual: false,
   },
   {
     id: ORDER_STATES.CANCELLED,
@@ -28,6 +30,7 @@ const STATE_OPTIONS = [
     color: '#64748b',
     bg: '#f1f5f9',
     border: '#e2e8f0',
+    virtual: false,
   },
 ]
 
@@ -60,9 +63,12 @@ const OrdersList = () => {
     setUpdateError(null)
 
     try {
-      await updateOrderState(orderId, stateOption.id)
+      if (!stateOption.virtual) {
+        // État réel PrestaShop → PUT
+        await updateOrderState(orderId, stateOption.id)
+      }
+      // État virtuel (IN_CART) → pas de PUT, mise à jour locale uniquement
 
-      // Mise à jour locale immédiate sans recharger toute la liste
       setLocalStates((prev) => ({
         ...prev,
         [orderId]: {
@@ -162,6 +168,9 @@ const OrdersList = () => {
                               >
                                 <i className={`ti ${option.icon}`} aria-hidden="true"></i>
                                 {option.label}
+                                {option.virtual && (
+                                  <span className="state-option-tag">local</span>
+                                )}
                               </button>
                             ))}
                             <button

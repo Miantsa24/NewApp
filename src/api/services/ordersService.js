@@ -2,10 +2,11 @@ import axiosInstance from '../axiosInstance'
 import { parseXML } from '../xmlParser'
 
 // IDs des états de commande PrestaShop
+// IN_CART est un état virtuel géré localement uniquement (pas de PUT vers PrestaShop)
 export const ORDER_STATES = {
-  PAYMENT_ACCEPTED: '2', // Paiement effectué
-  PAYMENT_ERROR:    '8', // Échec paiement
-  CANCELLED:        '6', // Annulé
+  IN_CART:          'cart',  // État virtuel — panier, pas encore une commande PrestaShop
+  PAYMENT_ACCEPTED: '2',     // Paiement effectué
+  CANCELLED:        '6',     // Annulé
 }
 
 export const getAllOrders = async () => {
@@ -32,19 +33,24 @@ export const deleteAllOrders = async () => {
 
 /**
  * Met à jour l'état d'une commande dans PrestaShop
+ * NE PAS appeler cette fonction pour ORDER_STATES.IN_CART (état virtuel)
  * PrestaShop exige le renvoi de l'objet complet lors d'un PUT
  * Étape 1 : GET pour récupérer les données actuelles
  * Étape 2 : Modifier current_state
  * Étape 3 : PUT avec l'objet complet reconstruit en XML
  */
 export const updateOrderState = async (orderId, newStateId) => {
+  // Garde : ne jamais envoyer l'état virtuel "cart" à PrestaShop
+  if (newStateId === ORDER_STATES.IN_CART) {
+    throw new Error('L\'état "Dans le panier" est un état virtuel, il ne peut pas être envoyé à PrestaShop.')
+  }
+
   // Étape 1 : Récupérer la commande actuelle
   const current = await getOrderById(orderId)
   const order = current?.prestashop?.order
   if (!order) throw new Error(`Commande #${orderId} introuvable`)
 
   // Étape 2 : Construire le XML complet avec le nouvel état
-  // On reconstruit les champs obligatoires que PrestaShop exige
   const xml = buildOrderXml(order, newStateId)
 
   // Étape 3 : PUT avec le XML complet

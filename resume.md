@@ -26,6 +26,7 @@ Hooks enrichis (jointure JS des données)
     ↓
 Composants React (affichage)
 
+### BACKOFFICE
 Structure des fichiers
 src/
 ├── api/
@@ -71,7 +72,7 @@ src/
     └── ResetPage.jsx + .css      ← réinitialisation par module
 
 Ce qu'on a implémenté
-1. Connexion PrestaShop ↔ NewApp
+1. Connexion PrestaShop ↔ NewApp : A voir
 
 Proxy Vite configuré pour éviter les CORS
 Instance Axios centralisée avec authentification Basic Auth via clé API PrestaShop
@@ -93,15 +94,16 @@ Commandes : référence, client, transporteur, total HT, total TTC, devise, nb p
 Catégories : arborescence visuelle (parent en bleu, enfant indenté), catégorie parente, nb produits, état
 Stock : produit lié, référence, déclinaison liée, quantité, statut (disponible / stock faible / rupture)
 Déclinaisons : produit parent, attributs (Taille: M / Couleur: Bleu), impact prix, prix final, stock
+
 3. Dashboard
 
 4 stats dynamiques : total produits, clients, commandes, ruptures de stock
-Dernières commandes (5 plus récentes)
-Produits récents (5 premiers)
-Alertes stock (rupture + stock faible) avec lien vers la page stock
-Actions rapides : Import CSV, Réinitialiser, Voir produits
+Detail commande date du systeme
+Liste des commandes par jour : nb de commande + montant
+Total general
+Champ de recherche de commande par date
 
-4. Import CSV
+4. Import CSV : A voir
 Fonctionnement en 5 étapes :
 
 Choix du module (6 modules disponibles)
@@ -113,6 +115,7 @@ Import par batch de 10 avec pause 300ms entre batches
 Rapport final : nb succès + erreurs avec numéro de ligne
 
 Modules supportés : products, customers, orders, categories, combinations, stock
+
 5. Réinitialisation
 
 Suppression par module individuel avec confirmation
@@ -120,10 +123,10 @@ Bouton "Tout supprimer" avec double confirmation
 Feedback visuel : spinner, badge succès / erreur par module
 Protection catégories système PrestaShop (id 1 et 2 non supprimables)
 
-6. Modification état commande
+6. Modification état commande : A VOIR ENCORE
 
 Dropdown inline dans le tableau commandes
-3 états disponibles : Paiement effectué (2), Échec paiement (8), Annulé (6)
+3 états disponibles : Paiement effectué (2), Dans le panier (localStates), Annulé (6)
 Mise à jour locale immédiate (optimistic update) sans recharger la liste
 PUT vers PrestaShop avec objet commande complet (PrestaShop exige le PUT complet)
 Feedback : spinner pendant la mise à jour, erreur sur la ligne si échec
@@ -137,40 +140,175 @@ Génération token JWT maison stocké dans localStorage (durée 8h)
 ProtectedRoute protège toutes les routes sauf /login
 Bouton logout dans la topbar qui supprime le token et redirige
 
+### FRONTOFFICE:
+Structure des fichiers
+src/
+├── front/
+│   ├── FrontLayout.jsx          ← navbar
+│   ├── FrontLayout.css          
+│   ├── services/
+│   │   ├── frontAuthService.js     ← getVal, generateToken, verifyToken, frontLogin,frontLogout,frontIsAuthenticated,frontGetCurrentUser : bcrypt
+│   └── hooks/
+│       ├── useProductDetail.js    ← fiche produit
+│   └── pages/
+│       ├── CartPage.css    ← panier css
+│       ├── CartPage.jsx    ← page panier
+│       ├── FrontLoginPage.css    ← login css
+│       ├── FrontLoginPage.jsx   ← page login
+│       ├── FrontHomePage.css    ← Home page css
+│       ├── FrontHomePage.jsx   ← page kliste utilisateur
+│       ├── ProductPage.css   ← fiche produit css
+│       ├── ProductPage.jsx     ← page fiche produit
+│       ├── ShopPage.css   ← liste produit css
+│       ├── ShopPage.jsx   ← page liste produit
 
-Ce qui reste à faire
-→ Amélioration import CSV
-  └── Gérer plusieurs fichiers CSV en même temps
-      (un par module, import séquentiel)
+# AVANCEMENT PROJET — J1 & J2
 
-→ Transitions d'états commande contrôlées
-  └── Afficher uniquement les états accessibles
-      selon l'état actuel (Option B)
+## Consignes générales
+- Utiliser **France** comme pays
+- Utiliser **Euro (€)** comme devise
+- Créer uniquement les pages demandées
+- Ne pas ajouter de menu ou d’affichage non demandé
 
-→ Documentation .md
-  └── useEnriched.md              ✅ fait
-  └── usePrestaShop.md            ✅ fait
-  └── updateService.md            ✅ fait
-  └── authService.md              → à faire
-  └── importService.md            → à faire
-  └── modulesConfig.md            → à faire
+---
 
-Points importants à retenir
-1. PrestaShop renvoie les champs sous 3 formes :
-   valeur simple / objet xlink / undefined
-   → toujours utiliser getVal() pour extraire
+# JOUR 1
 
-2. PrestaShop renvoie 1 item comme objet, 2+ comme tableau
-   → toujours utiliser toArray() pour normaliser
+# NewAPP
 
-3. Un PUT PrestaShop exige l'objet COMPLET
-   → toujours GET avant PUT
+## Backoffice
 
-4. display=full évite N+1 requêtes
-   → toujours l'utiliser sur les listes
+| Fonctionnalité | État | Remarques |
+|---|---|---|
+| Login / mot de passe administrateur | ⚠️ À revoir | Fonctionnel mais amélioration nécessaire |
+| Protection des pages du backoffice | ❌ À faire | Empêcher l’accès sans authentification |
+| Page de réinitialisation des données | ✅ Fait |  |
+| Page d’import des fichiers | ❌ À refaire complètement | Structure et logique à revoir |
+| Affichage des commandes | ⚠️ À confirmer | Vérifier la logique métier |
+| Modification de l’état des commandes | ⚠️ À confirmer | États utilisés : paiement effectué / annulé |
 
-5. Le mot de passe employé n'est pas exposé par l'API
-   → stocké dans .env et comparé côté client
+### Fichiers d’import : A tester quand import est fait
 
-6. Les catégories id=1 et id=2 sont réservées PrestaShop
-   → ne jamais les supprimer
+| Fichier | État / Remarque |
+|---|---|
+| `import-data-mai-26` | 3 fichiers CSV pour les données |
+| CSV modifié le 11/05 à 13:15 | Vérifier les modifications (couleur rouge) |
+| `images.zip` | Fichier ZIP contenant les images |
+
+---
+
+## FrontOffice
+
+| Fonctionnalité | État | Remarques |
+|---|---|---|
+| Page d’accueil produits | ✅ Fait |  |
+| Fiche produit | ✅ Fait |  |
+| Workflow d’achat complet | ❌ À faire | Login obligatoire |
+| Gestion du panier | ❌ À faire |  |
+| Validation de commande | ❌ À faire |  |
+| Paiement à la livraison uniquement | ❌ À faire | Aucun autre mode de paiement |
+| Frais de livraison | ❌ À faire | Aucun frais |
+| Page “Mes commandes” | ❌ À faire |  |
+
+---
+
+# ExistingApp (PrestaShop)
+
+| Vérification | État | Remarques |
+|---|---|---|
+| Les données importées sont visibles dans le backoffice PrestaShop | ❌ À vérifier |  |
+| Les modifications des données impactent la NewAPP | ❌ À vérifier | Synchronisation à confirmer |
+
+---
+
+# JOUR 2
+
+# NewAPP
+
+## Backoffice
+
+| Fonctionnalité | État | Remarques |
+|---|---|---|
+| États des commandes importés | ⚠️ À confirmer | Logique métier à valider |
+| Tableau de bord | ✅ Fait |  |
+| Statistiques par jour | ✅ Fait | Nombre de commandes + montant |
+| Total général | ✅ Fait |  |
+
+### États utilisés
+
+| État | Remarque |
+|---|---|
+| Dans le panier | Cart uniquement, pas encore commande |
+| Paiement effectué |  |
+| Annulé |  |
+
+### Point à clarifier
+
+| Sujet | Remarque |
+|---|---|
+| “Ny import 1 ihany ny déclinaison, fa tsisy combinaison” | À clarifier complètement |
+
+---
+
+## FrontOffice
+
+| Fonctionnalité | État | Remarques |
+|---|---|---|
+| Nouvelle page d’accueil : liste des utilisateurs existants | ✅ Fait |  |
+| Choix de l’utilisateur pour connexion | ✅ Fait | |
+| Option “utilisateur anonyme” | ❌ À faire |  |
+| Affichage des marques HOT / NEW | ❌ À faire | Basé sur `date_availability_produit` |
+| Recherche multicritère produits | ✅ Fait |  |
+
+### Règles des badges produits
+
+| Badge | Condition |
+|---|---|
+| HOT | Produit sorti il y a 1 jour |
+| NEW | Produit sorti il y a moins d’1 semaine |
+
+### Recherche multicritère
+
+- Nom
+- Catégorie
+- Intervalle de prix
+
+---
+
+# RÉCAPITULATIF GLOBAL
+
+## ✅ Fonctionnalités terminées
+
+- Page accueil produits
+- Fiche produit
+- Tableau de bord statistiques
+- Recherche multicritère
+- Page réinitialisation données
+- Liste des utilisateurs existants
+- Login utilisateur frontoffice
+- Gestion panier : un panier = un client, panier garder pour le compte meme deconnexion
+- Workflow d’achat complet : login, choix produit, ajout panier, modal validation commande : adresse
+- Validation commande
+- Paiement à la livraison + sans frais de livraison 
+
+---
+
+## ⚠️ Fonctionnalités à revoir / confirmer
+
+- Login backoffice : Protection backoffice
+- Import fichiers + import images 
+- Logique des états de commande
+- Synchronisation ExistingApp ↔ NewAPP
+- Gestion des déclinaisons / combinaisons
+
+
+---
+
+## ❌ Fonctionnalités restantes à faire
+- Apres avoir cliquer sur valider commande : etat commande ? sans erreur ? appercu dans prestashop et nexapp backoffice?
+- Page “Mes commandes”
+- Utilisateur anonyme
+- Badges HOT / NEW
+- Vérification des imports dans PrestaShop
+
+

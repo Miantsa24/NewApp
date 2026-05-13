@@ -11,6 +11,13 @@ import Dashboard from './pages/Dashboard'
 import OrdersList from './components/OrdersList'
 import ImportPage from './pages/ImportPage'
 import ResetPage from './pages/ResetPage'
+import ShopPage from './front/pages/ShopPage'
+import ProductPage from './front/pages/ProductPage'
+import CartPage from './front/pages/CartPage'
+import FrontLoginPage from './front/pages/FrontLoginPage'
+import FrontHomePage from './front/pages/FrontHomePage'
+import OrderConfirmPage from './front/pages/OrderConfirmPage'
+
 
 function App() {
   return (
@@ -19,6 +26,14 @@ function App() {
 
         {/* Route publique */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Routes FrontOffice — publiques */}
+         <Route path="/shop"                    element={<FrontHomePage />} />
+        <Route path="/shop/products"           element={<ShopPage />} />
+        <Route path="/shop/product/:id"        element={<ProductPage />} />
+        <Route path="/shop/cart"               element={<CartPage />} />
+        <Route path="/shop/login"              element={<FrontLoginPage />} />
+        <Route path="/shop/order-confirm/:id" element={<OrderConfirmPage />} />
 
         {/* Routes protégées */}
         <Route path="/*" element={
