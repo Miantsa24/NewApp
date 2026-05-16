@@ -71,8 +71,26 @@ const useEnrichedStock = () => {
           combinationMap[id] = getVal(c.reference) || null
         })
 
-        // Étape 4 : Enrichissement
-        const enriched = rawStock.map((s) => {
+        // Étape 4 : Filtrer les lignes produit-niveau redondantes
+        // Pour un produit avec déclinaisons, PS crée une entrée id_product_attribute=0 (somme)
+        // ET une entrée par déclinaison. On n'affiche que les déclinaisons.
+        const productsWithCombinations = new Set(
+          rawStock
+            .filter(s => {
+              const c = String(getVal(s.id_product_attribute))
+              return c && c !== '0'
+            })
+            .map(s => String(getVal(s.id_product)))
+        )
+        const filteredStock = rawStock.filter(s => {
+          const productId = String(getVal(s.id_product))
+          const combId    = String(getVal(s.id_product_attribute))
+          const isProductLevel = !combId || combId === '0'
+          return !(isProductLevel && productsWithCombinations.has(productId))
+        })
+
+        // Étape 5 : Enrichissement
+        const enriched = filteredStock.map((s) => {
           const productId     = String(getVal(s.id_product))
           const combinationId = String(getVal(s.id_product_attribute))
           const quantity      = parseInt(getVal(s.quantity) || 0)
