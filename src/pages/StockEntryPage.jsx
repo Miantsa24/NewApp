@@ -1,24 +1,25 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import useEnrichedStock from '../hooks/useEnrichedStock'
 import useEnrichedProducts from '../hooks/useEnrichedProducts'
 import { addStock } from '../api/services/stockService'
 import './StockEntryPage.css'
 
 const StockEntryPage = () => {
+  const navigate = useNavigate()
   const { stock, loading: loadingS, error: errorS } = useEnrichedStock()
   const { products, loading: loadingP } = useEnrichedProducts()
 
   const [search, setSearch] = useState('')
   const [onlyOutOfStock, setOnlyOutOfStock] = useState(false)
-  const [modal, setModal] = useState(null)        // ligne stock sélectionnée
+  const [modal, setModal] = useState(null)
   const [quantity, setQuantity] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState(null)  // { type, msg, line }
-  const [refreshTick, setRefreshTick] = useState(0) // pour MAJ locale après ajout
+  const [feedback, setFeedback] = useState(null)
+  const [refreshTick, setRefreshTick] = useState(0)
 
   const loading = loadingS || loadingP
 
-  // Map des miniatures produit (depuis useEnrichedProducts)
   const productImageMap = useMemo(() => {
     const map = {}
     products.forEach(p => {
@@ -27,7 +28,6 @@ const StockEntryPage = () => {
     return map
   }, [products])
 
-  // Filtrage
   const filteredStock = useMemo(() => {
     const q = search.trim().toLowerCase()
     return stock.filter(s => {
@@ -41,8 +41,7 @@ const StockEntryPage = () => {
     })
   }, [stock, search, onlyOutOfStock, refreshTick])
 
-  // Stock local override après un ajout réussi (pour éviter un refetch complet)
-  const [overrides, setOverrides] = useState({}) // { stockId: newQuantity }
+  const [overrides, setOverrides] = useState({})
 
   const getDisplayedQty = (s) => {
     return overrides[s.id] !== undefined ? overrides[s.id] : s.quantity
@@ -64,6 +63,11 @@ const StockEntryPage = () => {
     if (submitting) return
     setModal(null)
     setQuantity('')
+  }
+
+  const goToHistory = (line) => {
+    const combId = line.combinationId || 0
+    navigate(`/stock/history/${line.productId}/${combId}`)
   }
 
   const handleSubmit = async () => {
@@ -92,9 +96,10 @@ const StockEntryPage = () => {
     } catch (err) {
       setFeedback({
         type: 'error',
-        msg: err?.response?.data
-          ? 'Erreur PrestaShop lors de la mise à jour.'
-          : (err.message || 'Erreur inconnue.'),
+        msg: err?.response?.data?.error
+          || err?.response?.data
+          || err.message
+          || 'Erreur inconnue.',
       })
     } finally {
       setSubmitting(false)
@@ -125,7 +130,6 @@ const StockEntryPage = () => {
         <span className="badge">{filteredStock.length}</span>
       </div>
 
-      {/* Barre de recherche + filtre */}
       <div className="stock-toolbar">
         <div className="stock-search">
           <i className="ti ti-search"></i>
@@ -152,7 +156,6 @@ const StockEntryPage = () => {
         </label>
       </div>
 
-      {/* Tableau */}
       {filteredStock.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-package-off"></i>
@@ -168,7 +171,7 @@ const StockEntryPage = () => {
               <th>Référence</th>
               <th>Déclinaison</th>
               <th>Stock actuel</th>
-              <th style={{ textAlign: 'right' }}>Action</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -203,13 +206,23 @@ const StockEntryPage = () => {
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button
-                      className="btn-add-stock"
-                      onClick={() => openModal(s)}
-                    >
-                      <i className="ti ti-plus"></i>
-                      Ajouter
-                    </button>
+                    <div className="stock-actions">
+                      <button
+                        className="btn-history"
+                        onClick={() => goToHistory(s)}
+                        title="Voir l'historique des mouvements"
+                      >
+                        <i className="ti ti-history"></i>
+                        Historique
+                      </button>
+                      <button
+                        className="btn-add-stock"
+                        onClick={() => openModal(s)}
+                      >
+                        <i className="ti ti-plus"></i>
+                        Ajouter
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -218,7 +231,6 @@ const StockEntryPage = () => {
         </table>
       )}
 
-      {/* Modale d'ajout */}
       {modal && (
         <div className="stock-modal-overlay" onClick={closeModal}>
           <div className="stock-modal" onClick={e => e.stopPropagation()}>

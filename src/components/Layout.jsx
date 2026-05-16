@@ -44,6 +44,7 @@ const Layout = ({ children }) => {
       // if (path === '/stock')        return 'Stock'
       // if (path === '/customers')    return 'Clients'
     if (path === '/stock')        return 'Ajout de stock'
+    if (path.startsWith('/stock/history'))  return 'Historique des mouvements'
     if (path === '/orders')       return 'Commandes'
     if (path === '/import')       return 'Import CSV'
     if (path === '/reset')        return 'Réinitialisation'

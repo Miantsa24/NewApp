@@ -113,6 +113,6 @@ Vérifier les erreurs suivants dans l’import
 Nom de colonne non conforme
 format de date différente de DD/MM/YYYY
 montant positif
-rajouter un tableau sur l’évolution du stock journalier d’un produit
+rajouter un tableau sur l’évolution du stock journalier d’un produit : erreur, manampy stock a fa tsy mipotra ao amle historique le izy
 mahazo micréer endpoint 1 (1 ihany ) ianareo ao am prestashop hiantsoana an’ilay code
 StockAvailable::updateQuantity($idProduct, 0, $delta)

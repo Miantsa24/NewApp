@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 // import StockList from './components/StockList'
 // import CustomersList from './components/CustomersList'
 import StockEntryPage from './pages/StockEntryPage'
+import StockHistoryPage from './pages/StockHistoryPage'
 import OrdersList from './components/OrdersList'
 import ImportPage from './pages/ImportPage'
 import ResetPage from './pages/ResetPage'
@@ -50,6 +51,8 @@ function App() {
                 <Route path="/stock"        element={<StockList />} /> */}
                 {/* <Route path="/customers"    element={<CustomersList />} /> */}
                 <Route path="/stock"        element={<StockEntryPage />} />
+                <Route path="/stock/history/:productId"                 element={<StockHistoryPage />} />
+                <Route path="/stock/history/:productId/:combinationId"  element={<StockHistoryPage />} />
                 <Route path="/orders"       element={<OrdersList />} />
                 <Route path="/import"       element={<ImportPage />} />
                 <Route path="/reset"        element={<ResetPage />} />
