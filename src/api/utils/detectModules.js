@@ -235,8 +235,8 @@ const completeForProducts = (row, mapping, registry) => {
 // ─── Dispatch des complétions ──────────────────────────────────────────────────
 
 const COMPLETIONS = {
-  taxes:      (row, mapping, registry) => completeForTaxes(row, mapping),
-  categories: (row, mapping, registry) => completeForCategories(row, mapping),
+  taxes:      (row, mapping) => completeForTaxes(row, mapping),
+  categories: (row, mapping) => completeForCategories(row, mapping),
   products:   (row, mapping, registry) => completeForProducts(row, mapping, registry),
 }
 
@@ -384,6 +384,8 @@ export const buildStockUpdateXml = (idStockAvailable, idProduct, quantity, idPro
     <id>${escapeXml(idStockAvailable)}</id>
     <id_product>${escapeXml(idProduct)}</id_product>
     <id_product_attribute>${escapeXml(idProductAttribute)}</id_product_attribute>
+    <id_shop>1</id_shop>
+    <id_shop_group>0</id_shop_group>
     <quantity>${escapeXml(String(quantity))}</quantity>
     <depends_on_stock>0</depends_on_stock>
     <out_of_stock>2</out_of_stock>

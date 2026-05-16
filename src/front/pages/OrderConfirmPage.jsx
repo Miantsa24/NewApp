@@ -31,7 +31,7 @@ const OrderConfirmPage = () => {
             </div>
             <div className="confirm-row">
               <span className="confirm-label">Total TTC</span>
-              <span className="confirm-value confirm-total">{totalTTC} Ar</span>
+              <span className="confirm-value confirm-total">{totalTTC} €</span>
             </div>
             <div className="confirm-row">
               <span className="confirm-label">Paiement</span>

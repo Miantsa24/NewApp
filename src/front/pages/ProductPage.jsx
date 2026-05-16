@@ -80,7 +80,7 @@ const ProductPage = () => {
         <div className="product-detail-info">
           <h1 className="product-detail-name">{product.name}</h1>
           <p className="product-detail-ref">Réf : {product.reference}</p>
-          <p className="product-detail-price">{displayPrice} Ar</p>
+          <p className="product-detail-price">{displayPrice} €</p>
 
           <p className={`product-detail-stock ${!inStock ? 'out' : ''}`}>
             {inStock ? `En stock (${displayStock})` : 'Rupture de stock'}

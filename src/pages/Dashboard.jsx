@@ -253,8 +253,8 @@ const Dashboard = () => {
                       <td><strong>{o.reference}</strong></td>
                       <td>{o.customer}</td>
                       <td className="muted">{o.carrier}</td>
-                      <td className="price">{o.totalHT} Ar</td>
-                      <td className="price">{o.totalTTC} Ar</td>
+                      <td className="price">{o.totalHT} €</td>
+                      <td className="price">{o.totalTTC} €</td>
                       <td>
                         <span className="order-state-badge" style={{
                           background: `${o.stateColor}22`,
