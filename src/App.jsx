@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 // import CombinationsList from './components/CombinationsList'
 // import StockList from './components/StockList'
 // import CustomersList from './components/CustomersList'
+import StockEntryPage from './pages/StockEntryPage'
 import OrdersList from './components/OrdersList'
 import ImportPage from './pages/ImportPage'
 import ResetPage from './pages/ResetPage'
@@ -17,6 +18,7 @@ import CartPage from './front/pages/CartPage'
 import FrontLoginPage from './front/pages/FrontLoginPage'
 import FrontHomePage from './front/pages/FrontHomePage'
 import OrderConfirmPage from './front/pages/OrderConfirmPage'
+import MyOrdersPage from './front/pages/MyOrdersPage'
 
 
 function App() {
@@ -34,6 +36,7 @@ function App() {
         <Route path="/shop/cart"               element={<CartPage />} />
         <Route path="/shop/login"              element={<FrontLoginPage />} />
         <Route path="/shop/order-confirm/:id" element={<OrderConfirmPage />} />
+        <Route path="/shop/my-orders"         element={<MyOrdersPage />} />
 
         {/* Routes protégées */}
         <Route path="/*" element={
@@ -46,6 +49,7 @@ function App() {
                 {/* <Route path="/combinations" element={<CombinationsList />} />
                 <Route path="/stock"        element={<StockList />} /> */}
                 {/* <Route path="/customers"    element={<CustomersList />} /> */}
+                <Route path="/stock"        element={<StockEntryPage />} />
                 <Route path="/orders"       element={<OrdersList />} />
                 <Route path="/import"       element={<ImportPage />} />
                 <Route path="/reset"        element={<ResetPage />} />

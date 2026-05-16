@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FrontLayout from '../FrontLayout'
 import { frontIsAuthenticated, getCartKey, frontGetCurrentUser } from '../services/frontAuthService'
@@ -8,11 +8,20 @@ import {
   getDefaultCurrency,
   createAddress,
   createOrder,
+  getStoredPsCart,
+  clearPsCart,
+  createEmptyPsCart,
+  syncPsCartRows,
+  deletePsCart,
 } from '../services/orderService'
 import './CartPage.css'
 
 const CartPage = () => {
-  const [cart, setCart]               = useState([])
+  const [cart, setCart]               = useState(() => {
+    const cartKey = getCartKey()
+    if (!cartKey) return []
+    return JSON.parse(localStorage.getItem(cartKey) || '[]')
+  })
   const [showModal, setShowModal]     = useState(false)
   const [addresses, setAddresses]     = useState([])
   const [selectedAddress, setSelectedAddress] = useState(null)
@@ -21,20 +30,63 @@ const CartPage = () => {
   const [submitting, setSubmitting]   = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [loadingModal, setLoadingModal] = useState(false)
+  const [psCartInfo, setPsCartInfo]   = useState(null)
+  const psInitDone = useRef(false)
   const navigate = useNavigate()
   const user = frontGetCurrentUser()
 
+  // Initialise le cart PS au montage si le panier est non-vide
   useEffect(() => {
-    const cartKey = getCartKey()
-    if (!cartKey) { setCart([]); return }
-    setCart(JSON.parse(localStorage.getItem(cartKey) || '[]'))
-  }, [])
+    if (psInitDone.current || !user?.id || cart.length === 0) return
+
+    psInitDone.current = true
+
+    const init = async () => {
+      try {
+        const [carrierId, currencyId] = await Promise.all([
+          getClickAndCollectCarrier(),
+          getDefaultCurrency(),
+        ])
+
+        let stored = getStoredPsCart(user.id)
+        let cartId, cartSecureKey
+
+        if (!stored) {
+          const created = await createEmptyPsCart(user.id, currencyId, carrierId)
+          cartId = created.cartId
+          cartSecureKey = created.cartSecureKey
+        } else {
+          cartId = stored.cartId
+          cartSecureKey = stored.cartSecureKey
+        }
+
+        await syncPsCartRows({ cartId, cartSecureKey, customerId: user.id, currencyId, carrierId, items: cart })
+        setPsCartInfo({ cartId, cartSecureKey, carrierId, currencyId })
+      } catch (err) {
+        console.error('Erreur initialisation panier PS:', err)
+        psInitDone.current = false
+      }
+    }
+
+    init()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = (updated) => {
     const cartKey = getCartKey()
     if (!cartKey) return
     localStorage.setItem(cartKey, JSON.stringify(updated))
     window.dispatchEvent(new Event('storage'))
+  }
+
+  const handlePsCartSync = (updatedItems) => {
+    if (!psCartInfo || !user?.id) return
+    if (updatedItems.length === 0) {
+      deletePsCart(user.id, psCartInfo.cartId).catch(e => console.error('PS cart delete error:', e))
+      setPsCartInfo(null)
+    } else {
+      syncPsCartRows({ ...psCartInfo, customerId: user.id, items: updatedItems })
+        .catch(e => console.error('PS cart sync error:', e))
+    }
   }
 
   const updateQty = (itemId, delta) => {
@@ -46,19 +98,20 @@ const CartPage = () => {
     }).filter(Boolean)
     setCart(updated)
     persist(updated)
+    handlePsCartSync(updated)
   }
 
   const removeItem = (itemId) => {
     const updated = cart.filter(i => i.itemId !== itemId)
     setCart(updated)
     persist(updated)
+    handlePsCartSync(updated)
   }
 
   const total    = cart.reduce((sum, item) => sum + parseFloat(item.price) * item.qty, 0)
   const totalHT  = (total / 1.20).toFixed(2)
   const totalTTC = total.toFixed(2)
 
-  // Ouvrir la modale — charger les adresses
   const handleOpenModal = async () => {
     setLoadingModal(true)
     setSubmitError(null)
@@ -82,7 +135,6 @@ const CartPage = () => {
     return field
   }
 
-  // Créer une adresse puis continuer
   const handleCreateAddress = async () => {
     if (!addressForm.address1 || !addressForm.city) {
       setSubmitError('Adresse et ville sont obligatoires')
@@ -96,7 +148,6 @@ const CartPage = () => {
         firstname: user.firstname,
         lastname:  user.lastname,
       })
-      // Recharger les adresses
       const addrs = await getCustomerAddresses(user.id)
       setAddresses(addrs)
       const newAddr = addrs.find(a => String(getVal(a.id)) === String(newId)) || addrs[addrs.length - 1]
@@ -109,7 +160,6 @@ const CartPage = () => {
     }
   }
 
-  // Valider la commande
   const handleConfirmOrder = async () => {
     if (!selectedAddress) {
       setSubmitError('Veuillez sélectionner ou créer une adresse')
@@ -118,11 +168,19 @@ const CartPage = () => {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const [carrierId, currencyId] = await Promise.all([
-        getClickAndCollectCarrier(),
-        getDefaultCurrency(),
-      ])
       const addressId = String(getVal(selectedAddress.id))
+
+      let carrierId, currencyId
+      if (psCartInfo) {
+        carrierId  = psCartInfo.carrierId
+        currencyId = psCartInfo.currencyId
+      } else {
+        ;[carrierId, currencyId] = await Promise.all([
+          getClickAndCollectCarrier(),
+          getDefaultCurrency(),
+        ])
+      }
+
       const { orderId, reference } = await createOrder({
         customerId: user.id,
         addressId,
@@ -131,8 +189,11 @@ const CartPage = () => {
         cart,
         totalHT,
         totalTTC,
+        existingCartId:         psCartInfo?.cartId,
+        existingCartSecureKey:  psCartInfo?.cartSecureKey,
       })
-      // Vider le panier
+
+      clearPsCart(user.id)
       persist([])
       setCart([])
       setShowModal(false)
@@ -206,7 +267,6 @@ const CartPage = () => {
         </div>
       )}
 
-      {/* ── Modale récapitulatif ── */}
       {showModal && (
         <div className="modal-overlay" onClick={() => !submitting && setShowModal(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -222,7 +282,6 @@ const CartPage = () => {
               <p className="modal-loading">Chargement...</p>
             ) : (
               <>
-                {/* Infos client */}
                 <div className="modal-section">
                   <p className="modal-section-label">
                     <i className="ti ti-user"></i> Client
@@ -231,7 +290,6 @@ const CartPage = () => {
                   <p className="modal-info-email">{user.email}</p>
                 </div>
 
-                {/* Adresse */}
                 <div className="modal-section">
                   <div className="modal-section-header">
                     <p className="modal-section-label">
@@ -311,7 +369,6 @@ const CartPage = () => {
                   )}
                 </div>
 
-                {/* Articles */}
                 <div className="modal-section">
                   <p className="modal-section-label">
                     <i className="ti ti-shopping-cart"></i> Articles
@@ -332,7 +389,6 @@ const CartPage = () => {
                   </div>
                 </div>
 
-                {/* Paiement */}
                 <div className="modal-section">
                   <p className="modal-section-label">
                     <i className="ti ti-truck"></i> Livraison & Paiement
@@ -343,7 +399,6 @@ const CartPage = () => {
                   </div>
                 </div>
 
-                {/* Total */}
                 <div className="modal-total">
                   <span>Total TTC</span>
                   <strong>{totalTTC} Ar</strong>

@@ -550,3 +550,110 @@
 
 .btn-primary:hover { background: #2563eb; }
 .btn-primary i { font-size: 16px; }
+
+/* ── Détection ── */
+.detection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.detection-card {
+  background: var(--bg-card, #fff);
+  border: 2px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.detection-card:hover {
+  border-color: #6366f1;
+}
+
+.detection-card.selected {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.detection-card.auto-detected {
+  border-color: #22c55e;
+}
+
+.detection-card.auto-detected.selected {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.detection-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.detection-card-label { flex: 1; }
+
+.detection-check {
+  color: #6366f1;
+  font-size: 1rem;
+}
+
+.detection-confidence {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* ── Mapping ── */
+.mapping-block {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.mapping-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.mapping-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.mapping-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.mapping-csv { color: #6366f1; }
+.mapping-xml { color: #0ea5e9; }
+
+/* ── Progression par module ── */
+.module-progress-row {
+  margin-bottom: 1rem;
+}
+
+.module-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}

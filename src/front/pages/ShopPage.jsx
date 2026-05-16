@@ -7,32 +7,26 @@ import './ShopPage.css'
 const ShopPage = () => {
   const { products, loading, error } = useEnrichedProducts()
 
-  const [searchName, setSearchName]     = useState('')
-  const [searchCat, setSearchCat]       = useState('')
-  const [priceMin, setPriceMin]         = useState('')
-  const [priceMax, setPriceMax]         = useState('')
+  const [searchName, setSearchName] = useState('')
+  const [searchCat, setSearchCat]   = useState('')
+  const [priceMin, setPriceMin]     = useState('')
+  const [priceMax, setPriceMax]     = useState('')
 
   const activeProducts = products.filter(p => p.active == 1)
 
-  // Liste des catégories uniques
   const categories = useMemo(() => {
     const all = activeProducts.map(p => p.categoryDefault).filter(Boolean)
     return [...new Set(all)].sort()
   }, [activeProducts])
 
-  // Filtrage multicritère
   const filtered = useMemo(() => {
     return activeProducts.filter(p => {
       const matchName = searchName.trim() === '' ||
         p.name.toLowerCase().includes(searchName.toLowerCase())
-
-      const matchCat = searchCat === '' ||
-        p.categoryDefault === searchCat
-
+      const matchCat = searchCat === '' || p.categoryDefault === searchCat
       const price = parseFloat(p.priceTTC || 0)
       const matchMin = priceMin === '' || price >= parseFloat(priceMin)
       const matchMax = priceMax === '' || price <= parseFloat(priceMax)
-
       return matchName && matchCat && matchMin && matchMax
     })
   }, [activeProducts, searchName, searchCat, priceMin, priceMax])
@@ -57,10 +51,8 @@ const ShopPage = () => {
         )}
       </div>
 
-      {/* Barre de recherche */}
       {!loading && !error && (
         <div className="shop-filters">
-          {/* Nom */}
           <div className="filter-field filter-field-grow">
             <label className="filter-label">Nom</label>
             <div className="filter-input-wrap">
@@ -80,7 +72,6 @@ const ShopPage = () => {
             </div>
           </div>
 
-          {/* Catégorie */}
           <div className="filter-field">
             <label className="filter-label">Catégorie</label>
             <div className="filter-input-wrap">
@@ -98,7 +89,6 @@ const ShopPage = () => {
             </div>
           </div>
 
-          {/* Prix min */}
           <div className="filter-field filter-field-price">
             <label className="filter-label">Prix min (Ar)</label>
             <div className="filter-input-wrap">
@@ -113,7 +103,6 @@ const ShopPage = () => {
             </div>
           </div>
 
-          {/* Prix max */}
           <div className="filter-field filter-field-price">
             <label className="filter-label">Prix max (Ar)</label>
             <div className="filter-input-wrap">
@@ -128,7 +117,6 @@ const ShopPage = () => {
             </div>
           </div>
 
-          {/* Reset */}
           {hasFilters && (
             <div className="filter-field filter-field-reset">
               <label className="filter-label">&nbsp;</label>
@@ -164,6 +152,11 @@ const ShopPage = () => {
             className="shop-card"
           >
             <div className="shop-card-img">
+              {product.badge && (
+                <span className={`shop-badge shop-badge-${product.badge.toLowerCase()}`}>
+                  {product.badge}
+                </span>
+              )}
               {product.imageUrl
                 ? <img src={product.imageUrl} alt={product.name} />
                 : <div className="shop-card-no-img"><i className="ti ti-photo"></i></div>

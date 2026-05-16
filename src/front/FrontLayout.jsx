@@ -1,11 +1,11 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { frontLogout, frontGetCurrentUser, getCartKey } from './services/frontAuthService'
+import { frontLogout, frontGetCurrentUser } from './services/frontAuthService'
 import './FrontLayout.css'
 
 const FrontLayout = ({ children }) => {
   const [cartCount, setCartCount] = useState(0)
-  const [user, setUser]           = useState(null)
+  const [user, setUser]           = useState(() => frontGetCurrentUser())
   const navigate  = useNavigate()
   const location  = useLocation()
 
@@ -23,10 +23,6 @@ const FrontLayout = ({ children }) => {
     syncCart()
     window.addEventListener('storage', syncCart)
     return () => window.removeEventListener('storage', syncCart)
-  }, [])
-
-  useEffect(() => {
-    setUser(frontGetCurrentUser())
   }, [])
 
   const handleLogout = () => {
@@ -51,6 +47,15 @@ const FrontLayout = ({ children }) => {
               <i className="ti ti-box"></i>
               Produits
             </Link>
+            {user && (
+              <Link
+                to="/shop/my-orders"
+                className={`front-nav-link ${isActive('/shop/my-orders') ? 'active' : ''}`}
+              >
+                <i className="ti ti-clipboard-list"></i>
+                Mes commandes
+              </Link>
+            )}
             <Link
               to="/shop"
               className={`front-nav-link ${isActive('/shop') ? 'active' : ''}`}

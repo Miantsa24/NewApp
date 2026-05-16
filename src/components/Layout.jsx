@@ -12,6 +12,7 @@ const NAV_ITEMS = [
       // { to: '/combinations', label: 'Déclinaisons', icon: 'ti-adjustments' },
       // { to: '/stock',        label: 'Stock',        icon: 'ti-package' },
       // { to: '/customers',    label: 'Clients',      icon: 'ti-users' },
+      { to: '/stock',        label: 'Stock',        icon: 'ti-package' },
       { to: '/orders',       label: 'Commandes',    icon: 'ti-clipboard-list' },
     ]
   },
@@ -42,6 +43,7 @@ const Layout = ({ children }) => {
       // if (path === '/combinations') return 'Déclinaisons'
       // if (path === '/stock')        return 'Stock'
       // if (path === '/customers')    return 'Clients'
+    if (path === '/stock')        return 'Ajout de stock'
     if (path === '/orders')       return 'Commandes'
     if (path === '/import')       return 'Import CSV'
     if (path === '/reset')        return 'Réinitialisation'

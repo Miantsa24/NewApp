@@ -10,6 +10,34 @@ export const MODULES_CONFIG = {
       'meta_title', 'meta_keywords', 'meta_description', 'link_rewrite'
     ],
     md5Fields: [],
+
+    detectionSignatures: {
+      'nom':                    { xml: 'name',            weight: 3 },
+      'name':                   { xml: 'name',            weight: 3 },
+      'reference':              { xml: 'reference',       weight: 3 },
+      'ref':                    { xml: 'reference',       weight: 2 },
+      'prix_ttc':               { xml: 'price',           weight: 2 },
+      'price':                  { xml: 'price',           weight: 2 },
+      'prix_achat':             { xml: 'wholesale_price', weight: 2 },
+      'wholesale_price':        { xml: 'wholesale_price', weight: 1 },
+      'date_availability_produit': { xml: 'available_date', weight: 2 },
+      'description':            { xml: 'description',     weight: 1 },
+      'actif':                  { xml: 'active',          weight: 1 },
+      'active':                 { xml: 'active',          weight: 1 },
+    },
+    detectionThreshold: 4,
+    importOrder: 3,
+
+    // Clé du registre : la référence produit extraite de la réponse PrestaShop
+    registryKey: (row) => row['reference'] || row['Reference'] || row['ref'] || '',
+    // Après POST produit : on stocke { reference → { id, stockAvailableId } }
+    // resolvers = comment injecter les IDs depuis le registre dans le XML
+    resolvers: {
+      // injecté dans buildXmlFromMapping via le registre global
+      id_tax_rules_group: { registryModule: 'taxes',      lookupField: 'Taxe' },
+      id_category_default: { registryModule: 'categories', lookupField: 'categorie' },
+    },
+
     requiredFields: [
       { csv: 'Name *',               xml: 'name',          desc: 'Nom du produit' },
       { csv: 'Price tax excluded',   xml: 'price',         desc: 'Prix HT' },
@@ -40,7 +68,6 @@ export const MODULES_CONFIG = {
       { csv: 'URL rewritten',        xml: 'link_rewrite',      desc: 'URL simplifiée' },
     ],
 
-    // ==================== SECTION RESET ====================
     reset: {
       order: 5,
       mainEndpoint: 'products',
@@ -65,6 +92,25 @@ export const MODULES_CONFIG = {
     xmlTag: 'customer',
     multilingualFields: [],
     md5Fields: ['passwd'],
+
+    detectionSignatures: {
+      'email':      { xml: 'email',     weight: 4 },
+      'pwd':        { xml: 'passwd',    weight: 3 },
+      'password':   { xml: 'passwd',    weight: 3 },
+      'passwd':     { xml: 'passwd',    weight: 3 },
+      'nom':        { xml: 'lastname',  weight: 1 },
+      'name':       { xml: 'lastname',  weight: 1 },
+      'adresse':    { xml: 'address',   weight: 2 },
+      'address':    { xml: 'address',   weight: 2 },
+      'prenom':     { xml: 'firstname', weight: 2 },
+      'firstname':  { xml: 'firstname', weight: 2 },
+    },
+    detectionThreshold: 4,
+    importOrder: 6,
+
+    // Après POST customer : stocke { email → id_customer }
+    registryKey: (row) => row['email'] || row['Email'] || '',
+
     requiredFields: [
       { csv: 'Last Name *',   xml: 'lastname',  desc: 'Nom de famille' },
       { csv: 'First Name *',  xml: 'firstname', desc: 'Prénom' },
@@ -102,6 +148,22 @@ export const MODULES_CONFIG = {
     xmlTag: 'order',
     multilingualFields: [],
     md5Fields: [],
+
+    detectionSignatures: {
+      'achat':          { xml: 'products',      weight: 3 },
+      'etat':           { xml: 'current_state', weight: 2 },
+      'state':          { xml: 'current_state', weight: 2 },
+      'total_paid':     { xml: 'total_paid',    weight: 2 },
+      'payment':        { xml: 'payment',       weight: 2 },
+      'id_customer':    { xml: 'id_customer',   weight: 2 },
+    },
+    detectionThreshold: 3,
+    importOrder: 7,
+
+    resolvers: {
+      id_customer: { registryModule: 'customers', lookupField: 'email' },
+    },
+
     requiredFields: [
       { csv: 'Total paid *',    xml: 'total_paid',   desc: 'Total payé' },
       { csv: 'Payment *',       xml: 'payment',      desc: 'Mode de paiement' },
@@ -136,6 +198,18 @@ export const MODULES_CONFIG = {
     xmlTag: 'category',
     multilingualFields: ['name', 'description', 'meta_title', 'meta_keywords', 'meta_description', 'link_rewrite'],
     md5Fields: [],
+
+    detectionSignatures: {
+      'categorie':  { xml: 'name',   weight: 4 },
+      'category':   { xml: 'name',   weight: 4 },
+      'cat':        { xml: 'name',   weight: 2 },
+    },
+    detectionThreshold: 2,
+    importOrder: 2,
+
+    // Après POST catégorie : stocke { "Akanjo" → id_category }
+    registryKey: (row) => row['categorie'] || row['category'] || row['cat'] || '',
+
     requiredFields: [
       { csv: 'Name *',        xml: 'name',   desc: 'Nom de la catégorie' },
       { csv: 'Active (0/1)',  xml: 'active', desc: 'Catégorie active' },
@@ -167,6 +241,29 @@ export const MODULES_CONFIG = {
     xmlTag: 'combination',
     multilingualFields: [],
     md5Fields: [],
+
+    detectionSignatures: {
+      'specificite':        { xml: 'attribute_type',  weight: 3 },
+      'specificité':        { xml: 'attribute_type',  weight: 3 },
+      'karazany':           { xml: 'attribute_value', weight: 3 },
+      'couleur':            { xml: 'attribute_value', weight: 2 },
+      'taille':             { xml: 'attribute_value', weight: 2 },
+      'prix_vente_ttc':     { xml: 'price',           weight: 2 },
+    },
+    detectionThreshold: 3,
+    importOrder: 4,
+
+    // Après POST combination : stocke { "T_01|ngoza" → id_combination }
+    registryKey: (row) => {
+      const ref = row['reference'] || row['Reference'] || ''
+      const val = row['karazany'] || row['specificité'] || row['specificite'] || ''
+      return val ? `${ref}|${val}` : ref
+    },
+
+    resolvers: {
+      id_product: { registryModule: 'products', lookupField: 'reference' },
+    },
+
     requiredFields: [
       { csv: 'Product ID *',                    xml: 'id_product', desc: 'ID du produit parent' },
       { csv: 'Attribute (Name:Type:Position)*', xml: 'reference',  desc: 'Attribut de déclinaison' },
@@ -197,6 +294,20 @@ export const MODULES_CONFIG = {
     xmlTag: 'stock_available',
     multilingualFields: [],
     md5Fields: [],
+
+    detectionSignatures: {
+      'stock_initial':    { xml: 'quantity', weight: 4 },
+      'stock':            { xml: 'quantity', weight: 2 },
+      'quantity':         { xml: 'quantity', weight: 2 },
+      'quantite':         { xml: 'quantity', weight: 2 },
+    },
+    detectionThreshold: 2,
+    importOrder: 5,
+
+    resolvers: {
+      id_product: { registryModule: 'products', lookupField: 'reference' },
+    },
+
     requiredFields: [
       { csv: 'Product ID *', xml: 'id_product', desc: 'ID du produit' },
       { csv: 'Quantity *',   xml: 'quantity',   desc: 'Quantité disponible' },
@@ -220,10 +331,57 @@ export const MODULES_CONFIG = {
     }
   },
 
+  taxes: {
+    label: 'Prix & Taxes',
+    apiEndpoint: 'taxes',
+    xmlTag: 'tax',
+    multilingualFields: ['name'],
+    md5Fields: [],
+
+    detectionSignatures: {
+      'taxe':       { xml: 'rate', weight: 4 },
+      'tax':        { xml: 'rate', weight: 4 },
+      'tva':        { xml: 'rate', weight: 4 },
+      'taux':       { xml: 'rate', weight: 3 },
+    },
+    detectionThreshold: 2,
+    importOrder: 1,
+
+    // Après la chaîne tax→tax_rules_group→tax_rule :
+    // stocke { "11.65" → id_tax_rules_group }
+    registryKey: (row) => {
+      const raw = row['Taxe'] || row['taxe'] || row['tax'] || row['tva'] || row['taux'] || ''
+      return String(raw).replace(',', '.').replace('%', '').trim()
+    },
+
+    requiredFields: [
+      { csv: 'Tax Name *', xml: 'name', desc: 'Nom de la taxe' },
+      { csv: 'Rate *',     xml: 'rate', desc: 'Taux (ex: 20 pour 20%)' },
+    ],
+    optionalFields: [
+      { csv: 'Active (0/1)', xml: 'active', desc: 'Taxe active' },
+    ],
+
+    reset: {
+      order: 9,
+      mainEndpoint: 'taxes',
+      label: 'Taxes',
+      countEndpoint: 'taxes',
+      subEntities: [
+        { key: 'specific_prices',      label: 'Specific Prices',      endpoint: 'specific_prices' },
+        { key: 'tax_rules',            label: 'Tax Rules',            endpoint: 'tax_rules' },
+        { key: 'tax_rule_groups',     label: 'Tax Rules Groups',     endpoint: 'tax_rule_groups' },
+      ]
+    }
+  },
+
   suppliers: {
     label: 'Fournisseurs',
     apiEndpoint: 'suppliers',
     xmlTag: 'supplier',
+    detectionSignatures: {},
+    detectionThreshold: 99,
+    importOrder: 8,
     reset: {
       order: 7,
       mainEndpoint: 'suppliers',
@@ -239,6 +397,9 @@ export const MODULES_CONFIG = {
     label: 'Marques / Fabricants',
     apiEndpoint: 'manufacturers',
     xmlTag: 'manufacturer',
+    detectionSignatures: {},
+    detectionThreshold: 99,
+    importOrder: 9,
     reset: {
       order: 8,
       mainEndpoint: 'manufacturers',
@@ -252,6 +413,9 @@ export const MODULES_CONFIG = {
     label: 'Entrepôts & Approvisionnement',
     apiEndpoint: 'warehouses',
     xmlTag: 'warehouse',
+    detectionSignatures: {},
+    detectionThreshold: 99,
+    importOrder: 10,
     reset: {
       order: 3,
       mainEndpoint: 'warehouses',
@@ -265,36 +429,20 @@ export const MODULES_CONFIG = {
       ]
     }
   },
-
-  taxes: {
-    label: 'Prix & Taxes',
-    apiEndpoint: 'taxes',
-    xmlTag: 'tax',
-    reset: {
-      order: 9,
-      mainEndpoint: 'taxes',
-      label: 'Taxes',
-      countEndpoint: 'taxes',
-      subEntities: [
-        { key: 'specific_prices',      label: 'Specific Prices',      endpoint: 'specific_prices' },
-        { key: 'tax_rules',            label: 'Tax Rules',            endpoint: 'tax_rules' },
-        { key: 'tax_rules_groups',     label: 'Tax Rules Groups',     endpoint: 'tax_rules_groups' },
-      ]
-    }
-  }
 }
 
-// Utilitaires exportés
 export const MODULE_KEYS = Object.keys(MODULES_CONFIG)
 
-// Retourne les modules triés par ordre de suppression (très important)
 export const getResetOrder = () => {
   return MODULE_KEYS
-    .map(key => ({
-      key,
-      ...MODULES_CONFIG[key].reset
-    }))
+    .map(key => ({ key, ...MODULES_CONFIG[key].reset }))
     .sort((a, b) => a.order - b.order)
+}
+
+export const getImportOrder = () => {
+  return MODULE_KEYS
+    .filter(key => MODULES_CONFIG[key].importOrder !== undefined)
+    .sort((a, b) => MODULES_CONFIG[a].importOrder - MODULES_CONFIG[b].importOrder)
 }
 
 export const TYPE_COLUMN_NAMES = ['type', 'Type', 'module', 'Module', 'entity', 'Entity']

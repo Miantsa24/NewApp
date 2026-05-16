@@ -225,3 +225,32 @@
 
 .shop-card-stock       { font-size: 0.75rem; color: var(--green); margin: 0; }
 .shop-card-stock.out   { color: var(--red); }
+
+/* ── Badges HOT / NEW ── */
+.shop-card-img {
+  position: relative;
+}
+
+.shop-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.shop-badge-hot {
+  background-color: #e53935;
+  color: #fff;
+}
+
+.shop-badge-new {
+  background-color: #2e7d32;
+  color: #fff;
+}
