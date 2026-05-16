@@ -90,7 +90,7 @@ const ShopPage = () => {
           </div>
 
           <div className="filter-field filter-field-price">
-            <label className="filter-label">Prix min (Ar)</label>
+            <label className="filter-label">Prix min (€)</label>
             <div className="filter-input-wrap">
               <input
                 type="number"
@@ -104,7 +104,7 @@ const ShopPage = () => {
           </div>
 
           <div className="filter-field filter-field-price">
-            <label className="filter-label">Prix max (Ar)</label>
+            <label className="filter-label">Prix max (€)</label>
             <div className="filter-input-wrap">
               <input
                 type="number"
@@ -167,7 +167,7 @@ const ShopPage = () => {
                 <span className="shop-card-cat">{product.categoryDefault}</span>
               )}
               <h3 className="shop-card-name">{product.name}</h3>
-              <p className="shop-card-price">{product.priceTTC} Ar</p>
+              <p className="shop-card-price">{product.priceTTC} €</p>
               <p className={`shop-card-stock ${product.quantity <= 0 ? 'out' : ''}`}>
                 {product.quantity > 0 ? `En stock (${product.quantity})` : 'Rupture de stock'}
               </p>

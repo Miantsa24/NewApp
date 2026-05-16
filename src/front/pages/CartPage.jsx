@@ -238,7 +238,7 @@ const CartPage = () => {
                 <div className="cart-item-info">
                   <p className="cart-item-name">{item.name}</p>
                   {item.attributeLabel && <p className="cart-item-attr">{item.attributeLabel}</p>}
-                  <p className="cart-item-price">{item.price} Ar / unité</p>
+                  <p className="cart-item-price">{item.price} € / unité</p>
                 </div>
                 <div className="cart-item-qty">
                   <button onClick={() => updateQty(item.itemId, -1)}>−</button>
@@ -246,7 +246,7 @@ const CartPage = () => {
                   <button onClick={() => updateQty(item.itemId, +1)}>+</button>
                 </div>
                 <p className="cart-item-subtotal">
-                  {(parseFloat(item.price) * item.qty).toFixed(2)} Ar
+                  {(parseFloat(item.price) * item.qty).toFixed(2)} €
                 </p>
                 <button className="cart-item-remove" onClick={() => removeItem(item.itemId)}>
                   <i className="ti ti-x"></i>
@@ -256,7 +256,7 @@ const CartPage = () => {
           </div>
 
           <div className="cart-summary">
-            <p className="cart-total">Total : <span>{totalTTC} Ar</span></p>
+            <p className="cart-total">Total : <span>{totalTTC} €</span></p>
             <button className="cart-checkout-btn" onClick={handleOpenModal}>
               Commander
             </button>
@@ -382,7 +382,7 @@ const CartPage = () => {
                         </span>
                         <span className="modal-item-qty">× {item.qty}</span>
                         <span className="modal-item-price">
-                          {(parseFloat(item.price) * item.qty).toFixed(2)} Ar
+                          {(parseFloat(item.price) * item.qty).toFixed(2)} €
                         </span>
                       </div>
                     ))}
@@ -401,7 +401,7 @@ const CartPage = () => {
 
                 <div className="modal-total">
                   <span>Total TTC</span>
-                  <strong>{totalTTC} Ar</strong>
+                  <strong>{totalTTC} €</strong>
                 </div>
 
                 {submitError && (

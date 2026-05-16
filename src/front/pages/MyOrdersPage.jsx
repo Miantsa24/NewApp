@@ -99,7 +99,7 @@ const MyOrdersContent = ({ user, navigate }) => {
                     </span>
                   </td>
                   <td className="my-orders-total">
-                    {item.totalTTC !== '0.00' ? `${item.totalTTC} Ar` : '—'}
+                    {item.totalTTC !== '0.00' ? `${item.totalTTC} €` : '—'}
                   </td>
                   <td className="my-orders-date">{item.dateAdd}</td>
                   <td>
