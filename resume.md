@@ -42,6 +42,7 @@ src/
 │   │   └── authService.js        ← GET employees : login, logout, JWT, getCurrentUser
 │   └── utils/
 │       ├── modulesConfig.js      ← config centralisée tous les modules
+│       ├── detectModules.js      ← detection automatique des modules lors de l'import
 │       └── csvToXml.js           ← conversion CSV row → XML PrestaShop
 │
 ├── hooks/
@@ -203,11 +204,11 @@ src/
 |---|---|---|
 | Page d’accueil produits | ✅ Fait |  |
 | Fiche produit | ✅ Fait |  |
-| Workflow d’achat complet | ❌ À faire | Login obligatoire |
-| Gestion du panier | ❌ À faire |  |
-| Validation de commande | ❌ À faire |  |
-| Paiement à la livraison uniquement | ❌ À faire | Aucun autre mode de paiement |
-| Frais de livraison | ❌ À faire | Aucun frais |
+| Workflow d’achat complet | ✅ Fait
+| Gestion du panier | ✅ Fait
+| Validation de commande | ✅ Fait
+| Paiement à la livraison uniquement | ✅ Fait
+| Frais de livraison | ✅ Fait
 | Page “Mes commandes” | ❌ À faire |  |
 
 ---
@@ -305,10 +306,118 @@ src/
 ---
 
 ## ❌ Fonctionnalités restantes à faire
-- Apres avoir cliquer sur valider commande : etat commande ? sans erreur ? appercu dans prestashop et nexapp backoffice?
+- Dans l'etat des commandes : tsy /orders rery no alaina fa lasa maka /cart?card (le panier) ko izy dia lasa afficher ao am liste commande ze ao anaty panier (mifandray am client) io le etat : dans le panier
+- Apres avoir cliquer sur valider commande : etat commande : tonga dia paiement effectue tsy afaka ovaina dans le panier tsony fa afaka ovaina annule, annule afaka ovaina paiement effectue fa tsisy afaka miverina dans le panier tsony, sans erreur ? appercu dans prestashop et nexapp backoffice?
 - Page “Mes commandes”
 - Utilisateur anonyme
 - Badges HOT / NEW
 - Vérification des imports dans PrestaShop
+- Import image, import fichier 2 et 3, (fichier 3 mot de passe en clair)
 
 
+### IMPORT :
+
+On s'est concentre sur l'import du backoffice 
+Voici la nouvelle version du backoffice:
+Étape 0 : Upload fichier → détection auto
+Étape 1 : Validation modules détectés (modifiable)
+Étape 2 : Configuration séparateurs
+Étape 3 : Aperçu par module
+Étape 4 : Import séquentiel + rapport
+Logique de détection
+Chaque module a des signatures (headers CSV normalisés → score) :
+fichier 1 headers : date_availability_produit, nom, reference, prix_ttc, Taxe, categorie, prix_achat
+→ products  : reference, nom, prix_ttc, prix_achat     → score 4  ✅ détecté
+→ categories: categorie                                 → score 1  ✅ détecté  
+→ taxes     : Taxe, prix_ttc                           → score 2  ✅ détecté
+
+fichier 2 headers : reference, specificité, karazany, stock_initial, prix_vente_ttc
+→ combinations: specificité, karazany                  → score 2  ✅
+→ stock       : stock_initial                          → score 1  ✅
+
+fichier 3 headers : date, nom, email, pwd, adresse, achat, etat
+→ customers: nom, email, pwd, adresse                  → score 4  ✅
+→ orders   : achat, etat                               → score 2  ✅
+Seuil minimum : score ≥ 1 → détecté, affiché avec niveau de confiance (haut/moyen/faible).
+src/api/utils/detectModules.js — moteur de détection (nouveau)
+src/api/utils/modulesConfig.js — on ajoute les signatures de détection (ajout seulement, rien cassé)
+src/api/services/importService.js — on remplace importCsv + on garde parseCsvFile/detectDelimiter
+src/pages/ImportPage.jsx — refonte complète du flux
+Mais il ya encore des erreurs a corriger, et on se concentre sur le fichier 1 d'abord
+
+voici ce qu'il faut revoir :
+le lien de des modules detectes doit aussi etre fait, ici par exemple fichier 1 = 3 modules : products, categories, taxes , la regle est dans un fichier csv meme si il y a 3 modules si c'est 3 modules sont regroupes dans un seul fichier csv ca veut dire que ces 3 modules sont lies
+
+Dans le fichier 1: FICHIER 1 REGLE : import du fichier 1 = entree dans produits (4 : lie a cahque categorie), entree dans categorie (lie au produit), entree dans taxes (liee au produit)
+date_availability_produit,nom,reference,prix_ttc,Taxe,categorie,prix_achat
+01/12/2025,Tshirt,T_01,"12,5","11,65%",Akanjo,"8,5"
+02/05/2026,Pantalon,P_01,"18,99","11,65%",Akanjo,"14,33"
+08/05/2026,Casquette,C_03,5,"5,60%",Accessoire,2
+08/05/2026,Montre,M_02,56,"5,60%",Accessoire,40
+ex : T_01 est lie a categorie Akanjo et le TVA s'applique au prix de T_01
+Donc quand je vois dans categorie Akanjo je dois voir que 2 produits est lie a cela, ect : FAIT
+Je sais pas si tu comprends
+Et de meme pour les autres fichiers
+fichier 2: 2 module detecte : declinaison et stock : erreurs , produit non reconnu, declinaison : attribut inserer, stock non insere, j'ai refais 2 module detecte + selection manuel de produit : reference dans produit : mais erreur 6 erreurs
+reference,specificité,karazany,stock_initial,prix_vente_ttc
+
+T_01,taille,ngoza,13,"12,5"
+
+T_01,taille,kely,10,15
+
+P_01,couleur,mainty,5,"23,49"
+
+P_01,couleur,fotsy,3,"18,99"
+
+C_03,,,10,
+
+M_02,,,11,
+LA ref T_01 est le produit qu'on a cree tout a l'heure et ceci est donc le detail de ce produit,....
+fichier 3: module detecte : client et commande, client inserer : mais gestion mot de passe? quand je teste dans frontoffice erreur : commande 0 inserer
+date,nom,email,pwd,adresse,achat,etat
+09/05/2026,Rakoto,rakoto@yopmail.com,XvzsX5O0!GBD0uXQ,Andoharanofotsy,"[(""T_01"";3;""ngoza"")]",
+16/04/2026,Rajao,rajao1970@yopmail.com,BAC?UoxjQIW;Na8ix,Analakely,"[(""T_01"";2;""kely""),(""C_03"";1;"""")]",paiement accepté
+07/05/2026,Rakoto,rakoto@yopmail.com,XvzsX5O0!GBD0uXQ,Andoharanofotsy,"[(""T_01"";1;""kely"")]",paiement accepté
+
+Donc pour tous les imports c'est comme cela si un fichier = plusieurs modules c'est que ces modules sont lies
+
+On doit corriger cela alors
+Le lien entre modules dans un même fichier CSV se traduit par des associations PrestaShop :
+
+Produit → Catégorie : id_category_default + associations/categories
+Produit → Taxe : id_tax_rules_group
+Déclinaison → Produit : id_product
+Stock → Produit : id_product
+Le problème central : au moment d'importer les produits, les catégories et taxes viennent d'être créées — il faut récupérer leurs IDs depuis les réponses PrestaShop et les injecter dans les lignes produits avant de les envoyer.
+PS : La reference dans le fichier 2 correspond à la reference du produit créé depuis le fichier 1. Donc le lien se fait via la colonne reference commune aux deux fichiers.
+les déclinaisons du fichier 2 — specificité + karazany — c'est le type d'attribut (taille, couleur) et la valeur (ngoza, kely, mainty...). Ces attributs doivent être créés dans PrestaShop (product_options + product_option_values) avant de créer les combinaisons. C'est un import en 3 étapes : option → option_value → combination.
+Ce qui change dans l'ordre d'import pour un fichier multi-modules :
+Fichier 1 :  taxes → categories → products (avec id_tax + id_category injectés)
+Fichier 2 :  product_options → product_option_values → combinations + stock (avec id_product injecté)
+Fichier 3 :  customers → addresses → orders (avec id_customer injecté)
+Mécanisme : après chaque POST réussi, on stocke la réponse dans un "registre" en mémoire { reference → id_prestashop }. Les modules suivants puisent dans ce registre pour injecter les IDs manquants.
+3 fichiers modifiés :
+
+detectModules.js — ajout d'un ImportRegistry + logique d'injection par module dans buildXmlFromMapping
+importService.js — sendOne retourne la réponse, importModuleRows alimente le registre
+modulesConfig.js — ajout de registryKey (comment extraire la clé d'une réponse) et resolvers (comment injecter les IDs)
+Fichier 1 :
+
+taxes POST → stocke { "11.65" → id_tax_rules_group_id } — mais attention, PrestaShop crée une tax pas un tax_rules_group. Il faut aussi créer un tax_rule_group puis le lier. C'est 3 appels : tax_rules_groups → tax_rules → puis injecter id_tax_rules_group dans le produit
+categories POST → stocke { "Akanjo" → 25, "Accessoire" → 26 }
+products POST → lit la colonne categorie + Taxe de la même ligne, injecte id_category_default + associations/categories + id_tax_rules_group
+
+Fichier 2 :
+
+product_options POST → stocke { "taille" → id, "couleur" → id }
+product_option_values POST → stocke { "ngoza" → id, "kely" → id, ... }
+combinations POST avec id_product résolu via reference
+stock PUT (pas POST) sur le stock_available déjà créé par PrestaShop lors du POST produit
+
+Fichier 3 :
+
+customers POST → stocke { "rakoto@yopmail.com" → id_customer }
+addresses POST avec id_customer injecté
+orders POST avec id_customer + order_details construits depuis le champ achat
+PrestaShop ne lie pas directement tax à un produit. La chaîne est : tax → tax_rules_group → tax_rule → produit via id_tax_rules_group. C'est 3 endpoints. on gère ça complètement
+le stock du fichier 2 — C'est un PUT sur stock_availables/{id} avec l'ID récupéré depuis la réponse du POST produit

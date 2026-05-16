@@ -15,7 +15,7 @@ export const getAllOrders = async () => {
 }
 
 export const getOrderById = async (id) => {
-  const response = await axiosInstance.get(`/orders/${id}?language=1`)
+  const response = await axiosInstance.get(`/orders/${id}?display=full&language=1`)
   return parseXML(response.data)
 }
 
@@ -29,6 +29,115 @@ export const deleteAllOrders = async () => {
   if (!ordersList) return
   const ordersArray = Array.isArray(ordersList) ? ordersList : [ordersList]
   await Promise.all(ordersArray.map((o) => deleteOrderById(o['@_id'])))
+}
+
+export const deleteCart = async (cartId) => {
+  await axiosInstance.delete(`/carts/${cartId}`)
+}
+
+/**
+ * Crée une commande depuis un panier PrestaShop existant (action backoffice).
+ * Le panier contient déjà les produits ; PrestaShop calcule les totaux via validateOrder().
+ * PS_OS_WS_PAYMENT est en état non-logable (13) → pas d'erreur OrderPayment.
+ * On récupère ensuite la commande créée et on passe son état à 2 (Paiement accepté).
+ */
+export const createOrderFromCart = async (cartItem) => {
+  // Le cart peut avoir été créé avec adresse=0 (création anticipée avant sélection d'adresse).
+  // Dans ce cas, on récupère automatiquement la première adresse active du client.
+  let addressId = cartItem.addressId
+  if (!addressId || addressId === '0') {
+    const addrRes = await axiosInstance.get(
+      `/addresses?display=full&filter[id_customer]=[${cartItem.customerId}]`
+    )
+    const addrData = parseXML(addrRes.data)
+    const raw = addrData?.prestashop?.addresses?.address
+    const addresses = (Array.isArray(raw) ? raw : raw ? [raw] : [])
+      .filter(a => String(getVal(a.deleted)) !== '1')
+    if (addresses.length === 0) {
+      throw new Error("Ce client n'a pas d'adresse de livraison configurée")
+    }
+    addressId = String(getVal(addresses[0].id))
+  }
+
+  // Panier PS FO : le transporteur n'est pas encore sélectionné (id_carrier=0).
+  // On prend le premier transporteur actif disponible dans PS.
+  let carrierId = cartItem.carrierId
+  if (!carrierId || carrierId === '0') {
+    const carrierRes = await axiosInstance.get('/carriers?display=full&filter[deleted]=[0]')
+    const carrierData = parseXML(carrierRes.data)
+    const raw = carrierData?.prestashop?.carriers?.carrier
+    const rawCarriers = raw ? (Array.isArray(raw) ? raw : [raw]) : []
+    const active = rawCarriers.find(c => String(getVal(c.active)) === '1') || rawCarriers[0]
+    carrierId = active ? String(getVal(active.id)) : '1'
+  }
+
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+
+  const orderXml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id_address_delivery>${addressId}</id_address_delivery>
+    <id_address_invoice>${addressId}</id_address_invoice>
+    <id_cart>${cartItem.rawCartId}</id_cart>
+    <id_currency>${cartItem.currencyId}</id_currency>
+    <id_lang>1</id_lang>
+    <id_customer>${cartItem.customerId}</id_customer>
+    <id_carrier>${carrierId}</id_carrier>
+    <module>ps_cashondelivery</module>
+    <payment>Paiement a la livraison</payment>
+    <recyclable>0</recyclable>
+    <gift>0</gift>
+    <gift_message></gift_message>
+    <mobile_theme>0</mobile_theme>
+    <total_discounts>0</total_discounts>
+    <total_discounts_tax_incl>0</total_discounts_tax_incl>
+    <total_discounts_tax_excl>0</total_discounts_tax_excl>
+    <total_paid>0</total_paid>
+    <total_paid_tax_incl>0</total_paid_tax_incl>
+    <total_paid_tax_excl>0</total_paid_tax_excl>
+    <total_paid_real>0</total_paid_real>
+    <total_products>0</total_products>
+    <total_products_wt>0</total_products_wt>
+    <total_shipping>0</total_shipping>
+    <total_shipping_tax_incl>0</total_shipping_tax_incl>
+    <total_shipping_tax_excl>0</total_shipping_tax_excl>
+    <carrier_tax_rate>0</carrier_tax_rate>
+    <total_wrapping>0</total_wrapping>
+    <total_wrapping_tax_incl>0</total_wrapping_tax_incl>
+    <total_wrapping_tax_excl>0</total_wrapping_tax_excl>
+    <round_mode>2</round_mode>
+    <round_type>1</round_type>
+    <conversion_rate>1</conversion_rate>
+    <secure_key>${cartItem.cartSecureKey || ''}</secure_key>
+    <id_shop_group>1</id_shop_group>
+    <id_shop>1</id_shop>
+    <valid>1</valid>
+    <date_add>${now}</date_add>
+    <date_upd>${now}</date_upd>
+    <invoice_date>0000-00-00 00:00:00</invoice_date>
+    <invoice_number>0</invoice_number>
+    <shipping_number></shipping_number>
+  </order>
+</prestashop>`
+
+  let response
+  try {
+    response = await axiosInstance.post('/orders', orderXml, {
+      headers: { 'Content-Type': 'application/xml' },
+    })
+  } catch (err) {
+    console.error('Backoffice order creation error:', err.response?.data)
+    throw err
+  }
+
+  const result = parseXML(response.data)
+  const orderId = String(getVal(result?.prestashop?.order?.id))
+  if (!orderId || orderId === 'undefined') throw new Error('Erreur création commande depuis panier')
+
+  // Passer à l'état 2 via updateOrderState (GET + PUT éprouvé)
+  await updateOrderState(orderId, ORDER_STATES.PAYMENT_ACCEPTED)
+
+  return orderId
 }
 
 /**
@@ -54,11 +163,16 @@ export const updateOrderState = async (orderId, newStateId) => {
   const xml = buildOrderXml(order, newStateId)
 
   // Étape 3 : PUT avec le XML complet
-  const response = await axiosInstance.put(`/orders/${orderId}`, xml, {
+  await axiosInstance.put(`/orders/${orderId}`, xml, {
     headers: { 'Content-Type': 'application/xml' },
   })
+}
 
-  return parseXML(response.data)
+const getVal = (field) => {
+  if (!field) return ''
+  if (typeof field === 'object' && field['#text'] !== undefined)
+    return field['#text']
+  return field
 }
 
 /**
@@ -67,12 +181,6 @@ export const updateOrderState = async (orderId, newStateId) => {
  * PrestaShop rejette les PUT avec des champs manquants
  */
 const buildOrderXml = (order, newStateId) => {
-  const getVal = (field) => {
-    if (!field) return ''
-    if (typeof field === 'object' && field['#text'] !== undefined)
-      return field['#text']
-    return field
-  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">

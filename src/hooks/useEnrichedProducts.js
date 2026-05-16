@@ -2,10 +2,6 @@ import { useState, useEffect } from 'react'
 import axiosInstance from '../api/axiosInstance'
 import { parseXML } from '../api/xmlParser'
 
-/**
- * Extrait la valeur d'un champ PrestaShop
- * qui peut être un objet xlink ou une valeur simple
- */
 export const getVal = (field) => {
   if (field === null || field === undefined) return null
   if (typeof field === 'object') {
@@ -15,18 +11,11 @@ export const getVal = (field) => {
   return field
 }
 
-/**
- * Normalise une réponse PrestaShop en tableau
- * Gère les cas : undefined, objet seul, tableau
- */
 const toArray = (data) => {
   if (!data) return []
   return Array.isArray(data) ? data : [data]
 }
 
-/**
- * Récupère tous les items d'un endpoint avec display=full
- */
 const fetchAll = async (endpoint, language = 1) => {
   const params = new URLSearchParams({ display: 'full', language })
   const response = await axiosInstance.get(`/${endpoint}?${params}`)
@@ -34,14 +23,16 @@ const fetchAll = async (endpoint, language = 1) => {
   return parsed
 }
 
-/**
- * Hook qui récupère les produits enrichis avec :
- * - Catégories (parent + enfant)
- * - Stock disponible
- * - Taux de TVA → calcul Prix TTC
- * - Fabricant
- * - Image principale
- */
+const computeBadge = (availableDateStr) => {
+  if (!availableDateStr || availableDateStr === '0000-00-00') return null
+  const availableDate = new Date(availableDateStr)
+  if (isNaN(availableDate.getTime())) return null
+  const diffDays = Math.floor((new Date() - availableDate) / (1000 * 60 * 60 * 24))
+  if (diffDays <= 1) return 'HOT'
+  if (diffDays < 7) return 'NEW'
+  return null
+}
+
 const useEnrichedProducts = () => {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +44,6 @@ const useEnrichedProducts = () => {
         setLoading(true)
         setError(null)
 
-        // Étape 1 : Récupérer toutes les données en parallèle
         const [
           productsData,
           categoriesData,
@@ -68,14 +58,12 @@ const useEnrichedProducts = () => {
           fetchAll('manufacturers'),
         ])
 
-        // Étape 2 : Extraire et normaliser les tableaux
-        const rawProducts     = toArray(productsData?.prestashop?.products?.product)
-        const rawCategories   = toArray(categoriesData?.prestashop?.categories?.category)
-        const rawStock        = toArray(stockData?.prestashop?.stock_availables?.stock_available)
-        const rawTaxRules     = toArray(taxRulesData?.prestashop?.tax_rule_groups?.tax_rule_group)
+        const rawProducts      = toArray(productsData?.prestashop?.products?.product)
+        const rawCategories    = toArray(categoriesData?.prestashop?.categories?.category)
+        const rawStock         = toArray(stockData?.prestashop?.stock_availables?.stock_available)
+        const rawTaxRules      = toArray(taxRulesData?.prestashop?.tax_rule_groups?.tax_rule_group)
         const rawManufacturers = toArray(manufacturersData?.prestashop?.manufacturers?.manufacturer)
 
-        // Étape 3 : Construire des maps pour jointure rapide par ID
         const categoryMap = {}
         rawCategories.forEach((cat) => {
           const id = getVal(cat.id)
@@ -107,46 +95,39 @@ const useEnrichedProducts = () => {
           manufacturerMap[id] = m.name || '—'
         })
 
-        // Étape 4 : Enrichir chaque produit
         const enriched = rawProducts.map((product) => {
-          // Nom
           const name = product.name?.language?.['#text']
             || product.name?.language
             || '—'
 
-          // Prix HT
           const priceHT = parseFloat(getVal(product.price) || 0)
-
-          // Taux TVA → Prix TTC
           const taxRuleId = getVal(product.id_tax_rules_group)
-          const taxRate = taxRuleId ? 0.20 : 0 // Taux par défaut 20%
+          const taxRate = taxRuleId ? 0.20 : 0
           const priceTTC = priceHT * (1 + taxRate)
 
-          // Catégorie par défaut
           const defaultCatId = getVal(product.id_category_default)
           const defaultCategory = categoryMap[defaultCatId] || null
-
-          // Catégorie parente
           const parentCategory = defaultCategory?.parentId
             ? categoryMap[defaultCategory.parentId] || null
             : null
 
-          // Stock
           const productId = getVal(product.id)
           const quantity = stockMap[productId] ?? 0
 
-          // Fabricant
           const manufacturerId = getVal(product.id_manufacturer)
           const manufacturer = manufacturerMap[manufacturerId] || '—'
 
-          // Image principale
           const imageId = getVal(product.id_default_image)
           const imageUrl = imageId
             ? `${import.meta.env.VITE_PRESTASHOP_URL}/api/images/products/${productId}/${imageId}`
             : null
 
-          // Référence
           const reference = getVal(product.reference) || '—'
+
+          const dateAddRaw = getVal(product.date_add)       // ← garder tel quel
+          const badge = computeBadge(getVal(product.available_date))  // ← changer ici
+
+
 
           return {
             id: productId,
@@ -160,7 +141,8 @@ const useEnrichedProducts = () => {
             categoryDefault: defaultCategory?.name || '—',
             categoryParent: parentCategory?.name || '—',
             imageUrl,
-            raw: product, // données brutes disponibles si besoin
+            badge,
+            raw: product,
           }
         })
 
@@ -172,6 +154,8 @@ const useEnrichedProducts = () => {
         setLoading(false)
       }
     }
+
+    
 
     fetchEnriched()
   }, [])

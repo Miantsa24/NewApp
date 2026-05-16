@@ -1,34 +1,57 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import FrontLayout from '../FrontLayout'
+import './OrderConfirmPage.css'
 
 const OrderConfirmPage = () => {
   const { id } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
 
+  const reference = state?.reference || '—'
+  const totalTTC  = state?.totalTTC  || '—'
+
   return (
     <FrontLayout>
-      <div style={{ maxWidth: 480, margin: '4rem auto', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 8 }}>
-          Commande confirmée !
-        </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: 4 }}>
-          Référence : <strong>{state?.reference || `#${id}`}</strong>
-        </p>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-          Total : <strong>{state?.totalTTC} Ar</strong>
-        </p>
-        <button
-          onClick={() => navigate('/shop/products')}
-          style={{
-            padding: '10px 24px', background: 'var(--accent)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-sm)', fontWeight: 600,
-            cursor: 'pointer', fontSize: '0.9rem'
-          }}
-        >
-          Continuer mes achats
-        </button>
+      <div className="confirm-wrapper">
+        <div className="confirm-card">
+          <div className="confirm-icon">
+            <i className="ti ti-circle-check"></i>
+          </div>
+          <h1 className="confirm-title">Commande confirmée !</h1>
+          <p className="confirm-subtitle">Merci pour votre achat. Votre commande a bien été enregistrée.</p>
+
+          <div className="confirm-details">
+            <div className="confirm-row">
+              <span className="confirm-label">Référence</span>
+              <span className="confirm-value">{reference}</span>
+            </div>
+            <div className="confirm-row">
+              <span className="confirm-label">Numéro de commande</span>
+              <span className="confirm-value">#{id}</span>
+            </div>
+            <div className="confirm-row">
+              <span className="confirm-label">Total TTC</span>
+              <span className="confirm-value confirm-total">{totalTTC} Ar</span>
+            </div>
+            <div className="confirm-row">
+              <span className="confirm-label">Paiement</span>
+              <span className="confirm-value">À la livraison</span>
+            </div>
+            <div className="confirm-row">
+              <span className="confirm-label">État</span>
+              <span className="confirm-badge">Paiement effectué</span>
+            </div>
+          </div>
+
+          <div className="confirm-actions">
+            <button className="confirm-btn-primary" onClick={() => navigate('/shop/products')}>
+              Continuer mes achats
+            </button>
+            <button className="confirm-btn-secondary" onClick={() => navigate('/shop')}>
+              Accueil
+            </button>
+          </div>
+        </div>
       </div>
     </FrontLayout>
   )

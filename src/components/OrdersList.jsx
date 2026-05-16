@@ -1,53 +1,39 @@
 import { useState } from 'react'
 import useEnrichedOrders from '../hooks/useEnrichedOrders'
-import { updateOrderState, ORDER_STATES } from '../api/services/ordersService'
+import { updateOrderState, createOrderFromCart, deleteCart, ORDER_STATES } from '../api/services/ordersService'
 import './List.css'
 
-// Les 3 états disponibles dans le dropdown
-const STATE_OPTIONS = [
-  {
-    id: ORDER_STATES.IN_CART,
-    label: 'Dans le panier',
-    icon: 'ti-shopping-cart',
-    color: '#d97706',
-    bg: '#fffbeb',
-    border: '#fde68a',
-    virtual: true, // État virtuel — pas de PUT vers PrestaShop
-  },
-  {
-    id: ORDER_STATES.PAYMENT_ACCEPTED,
-    label: 'Paiement effectué',
-    icon: 'ti-circle-check',
-    color: '#16a34a',
-    bg: '#f0fdf4',
-    border: '#bbf7d0',
-    virtual: false,
-  },
-  {
-    id: ORDER_STATES.CANCELLED,
-    label: 'Annulé',
-    icon: 'ti-ban',
-    color: '#64748b',
-    bg: '#f1f5f9',
-    border: '#e2e8f0',
-    virtual: false,
-  },
-]
+const PAYMENT_OPTION = {
+  id: ORDER_STATES.PAYMENT_ACCEPTED,
+  label: 'Paiement effectué',
+  icon: 'ti-circle-check',
+  color: '#16a34a',
+}
+
+const CANCELLED_OPTION = {
+  id: ORDER_STATES.CANCELLED,
+  label: 'Annulé',
+  icon: 'ti-ban',
+  color: '#64748b',
+}
+
+const getStateOptions = (stateId) => {
+  if (stateId === ORDER_STATES.IN_CART)          return [PAYMENT_OPTION, CANCELLED_OPTION]
+  if (stateId === ORDER_STATES.PAYMENT_ACCEPTED) return [CANCELLED_OPTION]
+  if (stateId === ORDER_STATES.CANCELLED)        return [PAYMENT_OPTION]
+  return [PAYMENT_OPTION, CANCELLED_OPTION]
+}
 
 const OrdersList = () => {
-  const { orders, loading, error } = useEnrichedOrders()
+  const { orders, loading, error, refresh } = useEnrichedOrders()
 
-  // updatingId : id de la commande en cours de mise à jour
-  const [updatingId, setUpdatingId] = useState(null)
-  // openDropdownId : id de la commande dont le dropdown est ouvert
+  const [updatingId,     setUpdatingId]     = useState(null)
   const [openDropdownId, setOpenDropdownId] = useState(null)
-  // updateError : { id, message } erreur sur une ligne
-  const [updateError, setUpdateError] = useState(null)
-  // localStates : { [orderId]: { state, stateColor } } états mis à jour localement
-  const [localStates, setLocalStates] = useState({})
+  const [updateError,    setUpdateError]    = useState(null)
+  const [localStates,    setLocalStates]    = useState({})
 
   if (loading) return <div className="loading">Chargement des commandes...</div>
-  if (error) return <div className="error">{error}</div>
+  if (error)   return <div className="error">{error}</div>
 
   if (orders.length === 0) return (
     <div className="empty-state">
@@ -57,27 +43,32 @@ const OrdersList = () => {
     </div>
   )
 
-  const handleStateChange = async (orderId, stateOption) => {
+  const handleStateChange = async (item, stateOption) => {
     setOpenDropdownId(null)
-    setUpdatingId(orderId)
+    setUpdatingId(item.id)
     setUpdateError(null)
 
     try {
-      if (!stateOption.virtual) {
-        // État réel PrestaShop → PUT
-        await updateOrderState(orderId, stateOption.id)
+      if (item.type === 'cart') {
+        if (stateOption.id === ORDER_STATES.PAYMENT_ACCEPTED) {
+          await createOrderFromCart(item)
+        } else {
+          await deleteCart(item.rawCartId)
+        }
+        refresh()
+      } else {
+        await updateOrderState(item.id, stateOption.id)
+        setLocalStates((prev) => ({
+          ...prev,
+          [item.id]: {
+            state:      stateOption.label,
+            stateColor: stateOption.color,
+            stateId:    stateOption.id,
+          },
+        }))
       }
-      // État virtuel (IN_CART) → pas de PUT, mise à jour locale uniquement
-
-      setLocalStates((prev) => ({
-        ...prev,
-        [orderId]: {
-          state: stateOption.label,
-          stateColor: stateOption.color,
-        },
-      }))
     } catch (err) {
-      setUpdateError({ id: orderId, message: 'Erreur lors de la mise à jour' })
+      setUpdateError({ id: item.id, message: 'Erreur lors de la mise à jour' })
       console.error(err)
     } finally {
       setUpdatingId(null)
@@ -107,12 +98,14 @@ const OrdersList = () => {
         </thead>
         <tbody>
           {orders.map((order) => {
-            const local = localStates[order.id]
+            const local             = localStates[order.id]
             const currentState      = local?.state      || order.state
             const currentStateColor = local?.stateColor || order.stateColor
+            const currentStateId    = local?.stateId    || order.stateId
             const isUpdating        = updatingId === order.id
             const isOpen            = openDropdownId === order.id
             const hasError          = updateError?.id === order.id
+            const stateOptions      = getStateOptions(currentStateId)
 
             return (
               <tr key={order.id}>
@@ -130,18 +123,15 @@ const OrdersList = () => {
                   </span>
                 </td>
 
-                {/* Colonne État — dropdown interactif */}
                 <td>
                   <div className="state-cell">
                     {isUpdating ? (
-                      // Spinner pendant la mise à jour
                       <span className="state-updating">
                         <i className="ti ti-loader-2 spin" aria-hidden="true"></i>
                         Mise à jour...
                       </span>
                     ) : (
                       <div className="state-dropdown-wrapper">
-                        {/* Badge cliquable */}
                         <button
                           className="order-state-btn"
                           style={{
@@ -155,22 +145,18 @@ const OrdersList = () => {
                           <i className="ti ti-chevron-down" aria-hidden="true"></i>
                         </button>
 
-                        {/* Dropdown */}
                         {isOpen && (
                           <div className="state-dropdown">
                             <p className="state-dropdown-label">Changer l'état</p>
-                            {STATE_OPTIONS.map((option) => (
+                            {stateOptions.map((option) => (
                               <button
                                 key={option.id}
                                 className="state-option"
                                 style={{ color: option.color }}
-                                onClick={() => handleStateChange(order.id, option)}
+                                onClick={() => handleStateChange(order, option)}
                               >
                                 <i className={`ti ${option.icon}`} aria-hidden="true"></i>
                                 {option.label}
-                                {option.virtual && (
-                                  <span className="state-option-tag">local</span>
-                                )}
                               </button>
                             ))}
                             <button
@@ -185,7 +171,6 @@ const OrdersList = () => {
                       </div>
                     )}
 
-                    {/* Erreur sur cette ligne */}
                     {hasError && (
                       <p className="state-error">{updateError.message}</p>
                     )}
