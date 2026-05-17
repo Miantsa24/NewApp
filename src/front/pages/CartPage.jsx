@@ -74,12 +74,15 @@ const CartPage = () => {
           psInitDone.current = false
           return
         }
-        const cartKey = getCartKey()
-        if (cartKey) {
-          localStorage.setItem(cartKey, JSON.stringify(orderResult.items))
-          window.dispatchEvent(new Event('storage'))
-          setCart(orderResult.items)
-        }
+        // NE PAS stocker dans front_cart (localStorage) : évite que le second useEffect
+        // traite ces articles comme un panier FO normal et crée une nouvelle commande.
+        setCart(orderResult.items)
+        // Stocker un marqueur type:'order' pour que clearPsCart fonctionne et que le
+        // second useEffect (cart non vide) reconnaisse qu'il s'agit d'un ordre importé.
+        localStorage.setItem(`ps_cart_${user.id}`, JSON.stringify({
+          type: 'order',
+          orderId: orderResult.orderId,
+        }))
         setPsCartInfo({
           type: 'order',
           orderId:    orderResult.orderId,
@@ -103,12 +106,22 @@ const CartPage = () => {
 
     const init = async () => {
       try {
+        // Si ps_cart stocke un ordre importé "Dans le panier", restaurer psCartInfo
+        // sans créer de nouveau panier PS (ce serait une nouvelle commande).
+        const stored = getStoredPsCart(user.id)
+        if (stored?.type === 'order') {
+          setPsCartInfo({
+            type: 'order',
+            orderId: stored.orderId,
+          })
+          return
+        }
+
         const [carrierId, currencyId] = await Promise.all([
           getClickAndCollectCarrier(),
           getDefaultCurrency(),
         ])
 
-        let stored = getStoredPsCart(user.id)
         let cartId, cartSecureKey
 
         if (!stored) {

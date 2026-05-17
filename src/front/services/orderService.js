@@ -3,8 +3,11 @@ import { parseXML } from '../../api/xmlParser'
 
 const getVal = (field) => {
   if (field === null || field === undefined) return ''
-  if (typeof field === 'object' && field['#text'] !== undefined) return field['#text']
-  return field
+  if (typeof field === 'object') {
+    if (field['#text'] !== undefined) return String(field['#text'])
+    return ''
+  }
+  return String(field)
 }
 
 const toArray = (data) => {
@@ -414,18 +417,30 @@ ${cartRowsXml}
   </order>
 </prestashop>`
 
-  let orderResponse
+  let orderId = ''
   try {
-    orderResponse = await axiosInstance.post('/orders', orderXml, {
+    const orderResponse = await axiosInstance.post('/orders', orderXml, {
       headers: { 'Content-Type': 'application/xml' },
     })
+    const orderResult = parseXML(orderResponse.data)
+    orderId = String(getVal(orderResult?.prestashop?.order?.id) || '')
   } catch (err) {
-    console.error('Order creation error:', err.response?.data)
-    throw err
+    // 500 = hook PS (gamification…) — la commande est committée, on la retrouve via id_cart
+    if (err.response?.status === 500) {
+      try {
+        const findResp = await axiosInstance.get(`/orders?display=full&filter[id_cart]=[${cartId}]`)
+        const findParsed = parseXML(findResp.data)
+        const raw = findParsed?.prestashop?.orders?.order
+        const found = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+        if (found) orderId = String(getVal(found.id) || '')
+      } catch { /* orderId reste vide → erreur ci-dessous */ }
+      if (!orderId) throw err
+    } else {
+      console.error('Order creation error:', err.response?.data)
+      throw err
+    }
   }
 
-  const orderResult = parseXML(orderResponse.data)
-  const orderId = String(getVal(orderResult?.prestashop?.order?.id))
   if (!orderId || orderId === 'undefined') throw new Error('Erreur création commande')
 
   // Étape 4 : passer l'état à 2 "Paiement accepté" via GET + PUT
