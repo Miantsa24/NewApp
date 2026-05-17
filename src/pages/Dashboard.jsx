@@ -133,7 +133,7 @@ const Dashboard = () => {
                 <div className="today-stat-divider"></div>
                 <div className="today-stat">
                   <span className="today-stat-val">{todayData.total.toFixed(2)}</span>
-                  <span className="today-stat-lbl">Ar TTC</span>
+                  <span className="today-stat-lbl">€ TTC</span>
                 </div>
               </div>
 
@@ -151,7 +151,7 @@ const Dashboard = () => {
                     <tr key={o.id}>
                       <td><strong>{o.reference}</strong></td>
                       <td>{o.customer}</td>
-                      <td className="price">{o.totalTTC} Ar</td>
+                      <td className="price">{o.totalTTC} €</td>
                       <td>
                         <span className="order-state-badge" style={{
                           background: `${o.stateColor}22`,
@@ -231,7 +231,7 @@ const Dashboard = () => {
                           ))}
                         </div>
                       </td>
-                      <td className="price">{data.total.toFixed(2)} Ar</td>
+                      <td className="price">{data.total.toFixed(2)} €</td>
                     </tr>
                   )
                 })}
@@ -242,7 +242,7 @@ const Dashboard = () => {
                   <td><strong>{stats.totalOrders}</strong></td>
                   <td><strong>{relevantOrders.reduce((s, o) => s + parseInt(o.productCount || 0), 0)}</strong></td>
                   <td></td>
-                  <td className="price"><strong>{stats.totalRevenue} Ar</strong></td>
+                  <td className="price"><strong>{stats.totalRevenue} €</strong></td>
                 </tr>
               </tfoot>
             </table>
@@ -281,7 +281,7 @@ const Dashboard = () => {
             <>
               <div className="search-result-summary">
                 <span className="count-badge">{searchData.count} commande{searchData.count > 1 ? 's' : ''}</span>
-                <span className="search-total">{searchData.total.toFixed(2)} Ar TTC</span>
+                <span className="search-total">{searchData.total.toFixed(2)} € TTC</span>
               </div>
               <table className="dash-mini-table" style={{ marginTop: 10 }}>
                 <thead>

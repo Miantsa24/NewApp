@@ -731,10 +731,17 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
 
   for (let i = 0; i < total; i++) {
     const row = rows[i]
-    const email    = row['email']  || row['Email']  || ''
-    const achatStr = row['achat']  || row['Achat']  || ''
-    const etat     = row['etat']   || row['Etat']   || ''
-    const dateStr  = row['date']   || ''
+    // Lecture insensible à la casse pour tous les champs commande
+    const getCsvField = (row, key) => {
+      const direct = row[key] || row[key[0].toUpperCase() + key.slice(1)] || row[key.toUpperCase()]
+      if (direct) return String(direct)
+      const entry = Object.entries(row).find(([k]) => k.toLowerCase() === key.toLowerCase())
+      return entry ? String(entry[1] || '') : ''
+    }
+    const email    = getCsvField(row, 'email')
+    const achatStr = getCsvField(row, 'achat')
+    const etat     = getCsvField(row, 'etat')
+    const dateStr  = getCsvField(row, 'date')
 
     try {
       // 1. Résoudre client
@@ -852,24 +859,43 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
 
       await sleep(600)
 
-      // Changer l'état de la commande :
-      // - etat vide → état "Dans le panier" PS (si créé/trouvé), sinon laisser l'état initial
-      // - etat non-vide → état spécifié (paiement accepté, annulé…)
-      const targetStateId = stateId !== null ? stateId : dansPanierStateId
-      if (targetStateId) {
-        try {
-          await updateOrderState(orderId, targetStateId, { dateAdd })
-        } catch (stateErr) {
-          console.warn(`Import: état ${targetStateId} non appliqué pour commande #${orderId}:`, stateErr.message)
+      // PS ne met à jour date_add via PUT que pour les états "payés" (logable=1 / paid=1, ex: état 2).
+      // Pour l'état "Dans le panier" (paid=0), PS ignore date_add dans le PUT → date reste NOW.
+      // Solution : passer d'abord par l'état 2 avec dateAdd (PS applique la date),
+      // puis basculer vers "Dans le panier" sans dateAdd (PS ne réécrit pas date_add déjà en base).
+      if (stateId === null && dansPanierStateId) {
+        // Étape A : état 2 + dateAdd → PS met à jour date_add pour les états payés
+        if (dateStr) {
+          try {
+            await updateOrderState(orderId, '2', { dateAdd })
+            await sleep(400)
+          } catch (e) {
+            console.warn(`Import: étape date via état 2 échouée pour #${orderId}:`, e.message)
+          }
         }
-      }
-
-      // Corriger date_add (PS force NOW() à la création même si passé dans le XML du POST)
-      if (dateStr) {
+        // Étape B : état final "Dans le panier" sans dateAdd — PS ne réécrit pas date_add
         try {
-          await updateOrderDateAdd(orderId, dateAdd)
-        } catch (dateErr) {
-          console.warn(`Import: date_add non corrigée pour commande #${orderId}:`, dateErr.message)
+          await updateOrderState(orderId, dansPanierStateId)
+        } catch (e) {
+          console.warn(`Import: état "Dans le panier" non appliqué pour #${orderId}:`, e.message)
+        }
+      } else {
+        // Paiement accepté, annulé… : transition directe avec dateAdd (PS l'applique pour ces états)
+        const targetStateId = stateId !== null ? stateId : dansPanierStateId
+        if (targetStateId) {
+          try {
+            await updateOrderState(orderId, targetStateId, { dateAdd })
+          } catch (stateErr) {
+            console.warn(`Import: état ${targetStateId} non appliqué pour commande #${orderId}:`, stateErr.message)
+          }
+        }
+        // Filet de sécurité sur la date pour paiement accepté / annulé
+        if (dateStr) {
+          try {
+            await updateOrderDateAdd(orderId, dateAdd)
+          } catch (dateErr) {
+            console.warn(`Import: date_add non corrigée pour commande #${orderId}:`, dateErr.message)
+          }
         }
       }
 

@@ -192,10 +192,15 @@ export const updateOrderDateAdd = async (orderId, dateAdd) => {
 }
 
 const getVal = (field) => {
-  if (!field) return ''
-  if (typeof field === 'object' && field['#text'] !== undefined)
-    return field['#text']
-  return field
+  if (field === null || field === undefined) return ''
+  if (typeof field === 'object') {
+    // xlink + texte : { '@_xlink:href': '...', '#text': 18 }
+    if (field['#text'] !== undefined) return String(field['#text'])
+    // xlink seul sans valeur textuelle (ex: shipping_number vide)
+    return ''
+  }
+  // Scalaire — String(0) → '0' (ne pas traiter 0 comme falsy)
+  return String(field)
 }
 
 /**
