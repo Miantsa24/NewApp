@@ -103,7 +103,7 @@ const MyOrdersContent = ({ user, navigate }) => {
                   </td>
                   <td className="my-orders-date">{item.dateAdd}</td>
                   <td>
-                    {item.type === 'cart' && (
+                    {(item.type === 'cart' || (item.state || '').toLowerCase() === 'dans le panier') && (
                       <button
                         className="my-orders-action-btn"
                         onClick={() => navigate('/shop/cart')}

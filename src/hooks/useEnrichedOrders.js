@@ -78,8 +78,14 @@ const useEnrichedOrders = () => {
         const orderStateMap = {}
         rawOrderStates.forEach((s) => {
           const id = String(getVal(s.id))
+          const lang = s.name?.language
+          const stateName = typeof lang === 'string'
+            ? lang
+            : (lang?.['#text'] != null ? String(lang['#text']) : null)
+              ?? (Array.isArray(lang) && lang[0]?.['#text'] != null ? String(lang[0]['#text']) : null)
+              ?? '—'
           orderStateMap[id] = {
-            name: s.name?.language?.['#text'] || s.name?.language || '—',
+            name: stateName || '—',
             color: getVal(s.color) || '#64748b',
           }
         })
@@ -98,11 +104,12 @@ const useEnrichedOrders = () => {
           carrierMap[id] = getVal(c.name) || '—'
         })
 
-        // Map nb produits par commande
+        // Map quantité totale par commande (somme des product_quantity de chaque ligne)
         const productCountMap = {}
         rawOrderDetails.forEach((d) => {
           const orderId = String(getVal(d.id_order))
-          productCountMap[orderId] = (productCountMap[orderId] || 0) + 1
+          const qty = parseInt(getVal(d.product_quantity) || 1)
+          productCountMap[orderId] = (productCountMap[orderId] || 0) + qty
         })
 
         // Map prix produit : id → { priceHT, priceTTC }
@@ -197,7 +204,7 @@ const useEnrichedOrders = () => {
               carrier: '—',
               totalHT: totalHT.toFixed(2),
               totalTTC: totalTTC.toFixed(2),
-              productCount: rows.length,
+              productCount: rows.reduce((sum, row) => sum + parseInt(getVal(row.quantity) || 0), 0),
               dateAdd: getVal(cart.date_add)?.split(' ')[0] || '—',
               raw: cart,
             }

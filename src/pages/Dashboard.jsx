@@ -30,20 +30,34 @@ const Dashboard = () => {
     lowStock:       stock.filter(s => s.lowStock).length,
   }
 
-  // Groupement par jour
+  // Seuls les états pertinents pour le dashboard
+  const DASHBOARD_STATES = ['cart', '2'] // dans le panier (virtuel) + paiement accepté
+  const relevantOrders = orders.filter(o =>
+    DASHBOARD_STATES.includes(o.stateId)
+    || o.type === 'cart'
+    || (o.state || '').toLowerCase() === 'dans le panier'
+  )
+
+  // "Aujourd'hui" : uniquement les items avec date_add = aujourd'hui
+  // (dans le panier OU paiement accepté, mais seulement s'ils datent d'aujourd'hui)
+  const todayOrders = relevantOrders.filter(o => o.dateAdd === today)
+  const todayData = todayOrders.length > 0
+    ? { count: todayOrders.length, total: todayOrders.reduce((s, o) => s + parseFloat(o.totalTTC || 0), 0), orders: todayOrders }
+    : null
+
+  // Groupement "par jour" : tous les items pertinents groupés par leur date réelle
   const ordersByDay = {}
-  orders.forEach((o) => {
-    const day = o.dateAdd || '—'
-    if (!ordersByDay[day]) ordersByDay[day] = { count: 0, total: 0, orders: [] }
-    ordersByDay[day].count += 1
-    ordersByDay[day].total += parseFloat(o.totalTTC || 0)
+  relevantOrders.forEach((o) => {
+    const day = o.dateAdd && o.dateAdd !== '—' ? o.dateAdd : null
+    if (!day) return
+    if (!ordersByDay[day]) ordersByDay[day] = { count: 0, total: 0, products: 0, orders: [] }
+    ordersByDay[day].count    += 1
+    ordersByDay[day].total    += parseFloat(o.totalTTC || 0)
+    ordersByDay[day].products += parseInt(o.productCount || 0)
     ordersByDay[day].orders.push(o)
   })
 
   const days = Object.entries(ordersByDay).sort((a, b) => new Date(b[0]) - new Date(a[0]))
-
-  // Commandes du jour système
-  const todayData = ordersByDay[today]
 
   // Commandes de la date recherchée
   const searchData = searchDate ? ordersByDay[searchDate] : null
@@ -174,27 +188,60 @@ const Dashboard = () => {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Commandes</th>
+                  <th>Cmd</th>
+                  <th>Qté</th>
+                  <th>États</th>
                   <th>Montant TTC</th>
                 </tr>
               </thead>
               <tbody>
-                {days.map(([day, data]) => (
-                  <tr key={day} className={day === today ? 'row-today' : ''}>
-                    <td>
-                      {day === today
-                        ? <span className="today-pill">Aujourd'hui</span>
-                        : day}
-                    </td>
-                    <td><span className="count-badge">{data.count}</span></td>
-                    <td className="price">{data.total.toFixed(2)} Ar</td>
-                  </tr>
-                ))}
+                {days.map(([day, data]) => {
+                  // Grouper les états de la journée en badges condensés
+                  const stateCounts = {}
+                  data.orders.forEach(o => {
+                    const key = o.state
+                    if (!stateCounts[key]) stateCounts[key] = { count: 0, color: o.stateColor }
+                    stateCounts[key].count++
+                  })
+                  return (
+                    <tr key={day} className={day === today ? 'row-today' : ''}>
+                      <td>
+                        {day === today
+                          ? <span className="today-pill">Aujourd'hui</span>
+                          : day}
+                      </td>
+                      <td><span className="count-badge">{data.count}</span></td>
+                      <td><span className="count-badge">{data.products}</span></td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {Object.entries(stateCounts).map(([state, { count, color }]) => (
+                            <span
+                              key={state}
+                              className="order-state-badge"
+                              style={{
+                                background: `${color}22`,
+                                color,
+                                border: `0.5px solid ${color}55`,
+                                fontSize: '0.72rem',
+                                padding: '1px 6px',
+                              }}
+                            >
+                              {count > 1 ? `${count}× ` : ''}{state}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="price">{data.total.toFixed(2)} Ar</td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="total-row">
                   <td><strong>Total général</strong></td>
                   <td><strong>{stats.totalOrders}</strong></td>
+                  <td><strong>{relevantOrders.reduce((s, o) => s + parseInt(o.productCount || 0), 0)}</strong></td>
+                  <td></td>
                   <td className="price"><strong>{stats.totalRevenue} Ar</strong></td>
                 </tr>
               </tfoot>

@@ -84,9 +84,18 @@ export const addStock = async (stockId, quantityToAdd) => {
 }
 
 /**
- * Récupère tous les mouvements de stock depuis PrestaShop (stock_movements).
+ * Récupère l'historique des mouvements pour un produit/déclinaison.
+ * Utilise le GET de l'endpoint custom (dual-purpose) qui lit ps_stock_mvt.
  */
-export const getAllStockMovements = async () => {
-  const response = await axiosInstance.get('/stock_movements?display=full')
-  return parseXML(response.data)
+export const getStockMovements = async (productId, combinationId = 0) => {
+  const response = await newappApi.get('/update_stock.php', {
+    params: {
+      id_product:           productId,
+      id_product_attribute: combinationId || 0,
+    },
+  })
+  if (!response.data?.success) {
+    throw new Error(response.data?.error || 'Erreur lecture mouvements')
+  }
+  return response.data.movements || []
 }

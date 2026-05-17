@@ -148,7 +148,12 @@ export const createOrderFromCart = async (cartItem) => {
  * Étape 2 : Modifier current_state
  * Étape 3 : PUT avec l'objet complet reconstruit en XML
  */
-export const updateOrderState = async (orderId, newStateId) => {
+/**
+ * @param {string} orderId
+ * @param {string} newStateId
+ * @param {{ dateAdd?: string }} options - dateAdd : forcer une date_add CSV (import)
+ */
+export const updateOrderState = async (orderId, newStateId, options = {}) => {
   // Garde : ne jamais envoyer l'état virtuel "cart" à PrestaShop
   if (newStateId === ORDER_STATES.IN_CART) {
     throw new Error('L\'état "Dans le panier" est un état virtuel, il ne peut pas être envoyé à PrestaShop.')
@@ -159,10 +164,28 @@ export const updateOrderState = async (orderId, newStateId) => {
   const order = current?.prestashop?.order
   if (!order) throw new Error(`Commande #${orderId} introuvable`)
 
-  // Étape 2 : Construire le XML complet avec le nouvel état
-  const xml = buildOrderXml(order, newStateId)
+  // Étape 2 : Construire le XML complet avec le nouvel état (+ date CSV si fournie)
+  const xml = buildOrderXml(order, newStateId, options.dateAdd)
 
   // Étape 3 : PUT avec le XML complet
+  await axiosInstance.put(`/orders/${orderId}`, xml, {
+    headers: { 'Content-Type': 'application/xml' },
+  })
+}
+
+/**
+ * Corrige le date_add d'une commande après sa création.
+ * PS force date_add = NOW() à la création via WS ; ce PUT dédié le remplace.
+ * Appel séparé de updateOrderState pour que PS traite les deux modifications indépendamment.
+ *
+ * @param {string} orderId
+ * @param {string} dateAdd - format 'YYYY-MM-DD HH:MM:SS'
+ */
+export const updateOrderDateAdd = async (orderId, dateAdd) => {
+  const current = await getOrderById(orderId)
+  const order = current?.prestashop?.order
+  if (!order) throw new Error(`Commande #${orderId} introuvable pour correction de date`)
+  const xml = buildOrderXml(order, getVal(order.current_state), dateAdd)
   await axiosInstance.put(`/orders/${orderId}`, xml, {
     headers: { 'Content-Type': 'application/xml' },
   })
@@ -180,7 +203,7 @@ const getVal = (field) => {
  * en remplaçant uniquement current_state
  * PrestaShop rejette les PUT avec des champs manquants
  */
-const buildOrderXml = (order, newStateId) => {
+const buildOrderXml = (order, newStateId, dateAddOverride) => {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -198,7 +221,7 @@ const buildOrderXml = (order, newStateId) => {
     <invoice_number>${getVal(order.invoice_number)}</invoice_number>
     <invoice_date>${getVal(order.invoice_date)}</invoice_date>
     <valid>${getVal(order.valid)}</valid>
-    <date_add>${getVal(order.date_add)}</date_add>
+    <date_add>${dateAddOverride || getVal(order.date_add)}</date_add>
     <date_upd>${getVal(order.date_upd)}</date_upd>
     <shipping_number>${getVal(order.shipping_number)}</shipping_number>
     <id_shop_group>${getVal(order.id_shop_group)}</id_shop_group>

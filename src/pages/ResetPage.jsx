@@ -1,24 +1,74 @@
-// src/pages/ResetPage.jsx
-
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import ResetModuleItem from '../components/ResetModuleItem'
-import { getResetStats, deleteAllSelected } from '../api/services/resetService'
+import { getResetStats, deleteAllSelected, RESET_CASCADE } from '../api/services/resetService'
 import { MODULES_CONFIG } from '../api/utils/modulesConfig'
 import './ResetPage.css'
 
-const ResetPage = () => {
-  const [stats, setStats] = useState({})
-  const [loadingStats, setLoadingStats] = useState(true)
-  
-  const [selectedModules, setSelectedModules] = useState({})
-  const [selectedSubEntities, setSelectedSubEntities] = useState({})
-  
-  const [statusPerModule, setStatusPerModule] = useState({})
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [result, setResult] = useState(null) // { success: [], errors: [] }
+// ─── Helpers cascade (niveau module) ──────────────────────────────────────────
 
-  // Chargement des statistiques au montage
+// Retourne l'ensemble transitif des modules que la suppression de 'key' impose de supprimer aussi
+// (sans inclure key lui-même)
+const getTransitiveCascade = (key) => {
+  const result = new Set()
+  const visit = (k) => {
+    ;(RESET_CASCADE[k] || []).forEach((dep) => {
+      if (!result.has(dep)) {
+        result.add(dep)
+        visit(dep)
+      }
+    })
+  }
+  visit(key)
+  return result
+}
+
+// À partir de la sélection manuelle, calcule :
+//   forced      : modules imposés par cascade (non cochés manuellement)
+//   allSelected : manual ∪ forced
+const computeCascade = (manuallySelected) => {
+  const forced = new Set()
+  Object.keys(manuallySelected).forEach((key) => {
+    if (!manuallySelected[key] || !MODULES_CONFIG[key]?.reset) return
+    getTransitiveCascade(key).forEach((dep) => {
+      if (!manuallySelected[dep]) forced.add(dep)
+    })
+  })
+  const allSelected = new Set([
+    ...Object.keys(manuallySelected).filter((k) => manuallySelected[k]),
+    ...forced,
+  ])
+  return { forced, allSelected }
+}
+
+// Pour un module forcé, retourne les labels des modules manuels qui l'imposent
+const getRequiredBy = (depKey, manuallySelected) =>
+  Object.keys(manuallySelected)
+    .filter(
+      (key) =>
+        manuallySelected[key] &&
+        MODULES_CONFIG[key]?.reset &&
+        getTransitiveCascade(key).has(depKey)
+    )
+    .map((key) => MODULES_CONFIG[key].reset.label || key)
+
+// ─── Composant ────────────────────────────────────────────────────────────────
+
+const ResetPage = () => {
+  const [stats,             setStats]             = useState({})
+  const [loadingStats,      setLoadingStats]       = useState(true)
+  const [manuallySelected,  setManuallySelected]   = useState({})
+  const [selectedSubEntities, setSelectedSubEntities] = useState({})
+  const [statusPerModule,   setStatusPerModule]    = useState({})
+  const [isDeleting,        setIsDeleting]         = useState(false)
+  const [showConfirm,       setShowConfirm]        = useState(false)
+  const [result,            setResult]             = useState(null)
+
+  // Cascade calculée à chaque changement de sélection manuelle
+  const { forced, allSelected } = useMemo(
+    () => computeCascade(manuallySelected),
+    [manuallySelected]
+  )
+
   useEffect(() => {
     const loadStats = async () => {
       try {
@@ -26,48 +76,38 @@ const ResetPage = () => {
         const data = await getResetStats()
         setStats(data)
 
-        // Tout cocher par défaut
         const initialModules = {}
-        const initialSubs = {}
-
-        Object.keys(data).forEach(key => {
+        const initialSubs    = {}
+        Object.keys(data).forEach((key) => {
           initialModules[key] = true
-          initialSubs[key] = {}
-          
-          // Cocher toutes les sous-entités par défaut
+          initialSubs[key]    = {}
           if (data[key].subEntities) {
-            Object.keys(data[key].subEntities).forEach(subKey => {
+            Object.keys(data[key].subEntities).forEach((subKey) => {
               initialSubs[key][subKey] = true
             })
           }
         })
-
-        setSelectedModules(initialModules)
+        setManuallySelected(initialModules)
         setSelectedSubEntities(initialSubs)
       } catch (err) {
-        console.error("Erreur chargement stats reset :", err)
+        console.error('Erreur chargement stats reset :', err)
       } finally {
         setLoadingStats(false)
       }
     }
-
     loadStats()
   }, [])
 
   const handleModuleToggle = (moduleKey) => {
-    setSelectedModules(prev => ({
-      ...prev,
-      [moduleKey]: !prev[moduleKey]
-    }))
+    // Un module forcé ne peut pas être décoché directement
+    if (forced.has(moduleKey)) return
+    setManuallySelected((prev) => ({ ...prev, [moduleKey]: !prev[moduleKey] }))
   }
 
   const handleSubToggle = (moduleKey, subKey) => {
-    setSelectedSubEntities(prev => ({
+    setSelectedSubEntities((prev) => ({
       ...prev,
-      [moduleKey]: {
-        ...prev[moduleKey],
-        [subKey]: !prev[moduleKey]?.[subKey]
-      }
+      [moduleKey]: { ...prev[moduleKey], [subKey]: !prev[moduleKey]?.[subKey] },
     }))
   }
 
@@ -77,32 +117,29 @@ const ResetPage = () => {
     setResult(null)
     setStatusPerModule({})
 
-    try {
-      const resultData = await deleteAllSelected(selectedModules, selectedSubEntities)
-      
-      // Mise à jour des statuts
-      const newStatuses = {}
-      resultData.success.forEach(item => {
-        newStatuses[item.module] = 'success'
-      })
-      resultData.errors.forEach(item => {
-        newStatuses[item.module] = 'error'
-      })
+    // Construire la map selectedModules depuis allSelected (manual + forced)
+    const selectedModulesMap = {}
+    Object.keys(MODULES_CONFIG).forEach((key) => {
+      selectedModulesMap[key] = allSelected.has(key)
+    })
 
+    try {
+      const resultData = await deleteAllSelected(selectedModulesMap, selectedSubEntities)
+
+      const newStatuses = {}
+      resultData.success.forEach((item) => { newStatuses[item.module] = 'success' })
+      resultData.errors.forEach((item)   => { newStatuses[item.module] = 'error'   })
       setStatusPerModule(newStatuses)
       setResult(resultData)
-      
     } catch (err) {
       console.error(err)
-      alert("Une erreur grave est survenue pendant la suppression.")
+      alert('Une erreur grave est survenue pendant la suppression.')
     } finally {
       setIsDeleting(false)
     }
   }
 
-  const totalToDelete = Object.keys(selectedModules)
-    .filter(key => selectedModules[key])
-    .length
+  const totalToDelete = allSelected.size
 
   if (loadingStats) {
     return <div className="reset-page loading">Chargement des statistiques...</div>
@@ -127,9 +164,12 @@ const ResetPage = () => {
 
       {/* Liste des modules */}
       <div className="reset-modules-list">
-        {Object.keys(MODULES_CONFIG).map(key => {
+        {Object.keys(MODULES_CONFIG).map((key) => {
           const moduleStat = stats[key]
           if (!moduleStat) return null
+
+          const isForced    = forced.has(key)
+          const forcedByLabels = isForced ? getRequiredBy(key, manuallySelected) : []
 
           return (
             <ResetModuleItem
@@ -138,7 +178,9 @@ const ResetPage = () => {
               label={moduleStat.label}
               count={moduleStat.mainCount}
               subEntities={moduleStat.subEntities}
-              selected={selectedModules[key]}
+              selected={allSelected.has(key)}
+              forced={isForced}
+              forcedBy={forcedByLabels}
               selectedSub={selectedSubEntities[key] || {}}
               onModuleToggle={handleModuleToggle}
               onSubToggle={handleSubToggle}
@@ -155,22 +197,28 @@ const ResetPage = () => {
           <thead>
             <tr>
               <th>Module</th>
-              <th>Quantité principale</th>
-              <th>Sous-entités sélectionnées</th>
+              <th>Quantité</th>
+              <th>Sous-entités</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {Object.keys(selectedModules).map(key => {
-              if (!selectedModules[key]) return null
+            {Object.keys(MODULES_CONFIG).map((key) => {
+              if (!allSelected.has(key)) return null
               const stat = stats[key]
+              if (!stat) return null
               const subs = selectedSubEntities[key] || {}
               const selectedSubsCount = Object.values(subs).filter(Boolean).length
-
               return (
                 <tr key={key}>
                   <td><strong>{stat.label}</strong></td>
                   <td>{stat.mainCount}</td>
                   <td>{selectedSubsCount > 0 ? `${selectedSubsCount} sous-entités` : '—'}</td>
+                  <td>
+                    {forced.has(key) && (
+                      <span className="summary-forced-badge">Requis</span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
@@ -178,10 +226,10 @@ const ResetPage = () => {
         </table>
       </div>
 
-      {/* Bouton Tout Supprimer */}
+      {/* Bouton supprimer */}
       <div className="reset-all-section">
         {!showConfirm ? (
-          <button 
+          <button
             className="btn-delete-all"
             onClick={() => setShowConfirm(true)}
             disabled={isDeleting || totalToDelete === 0}
@@ -195,15 +243,16 @@ const ResetPage = () => {
         ) : (
           <div className="confirm-box">
             <h3>⚠️ Confirmation finale</h3>
-            <p>Cette action est <strong>irréversible</strong>.<br />
-               Voulez-vous vraiment supprimer les données sélectionnées ?</p>
-            
+            <p>
+              Cette action est <strong>irréversible</strong>.<br />
+              Voulez-vous vraiment supprimer les données sélectionnées ?
+            </p>
             <div className="confirm-actions">
               <button className="btn-cancel" onClick={() => setShowConfirm(false)}>
                 Annuler
               </button>
-              <button 
-                className="btn-confirm-delete" 
+              <button
+                className="btn-confirm-delete"
                 onClick={handleResetAll}
                 disabled={isDeleting}
               >
@@ -221,13 +270,13 @@ const ResetPage = () => {
           {result.success.length > 0 && (
             <div className="success-list">
               <strong>✅ Supprimés avec succès :</strong>
-              <ul>{result.success.map(s => <li key={s.module}>{s.label}</li>)}</ul>
+              <ul>{result.success.map((s) => <li key={s.module}>{s.label}</li>)}</ul>
             </div>
           )}
           {result.errors.length > 0 && (
             <div className="error-list">
               <strong>❌ Erreurs :</strong>
-              <ul>{result.errors.map(e => <li key={e.module}>{e.label} — {e.error}</li>)}</ul>
+              <ul>{result.errors.map((e) => <li key={e.module}>{e.label} — {e.error}</li>)}</ul>
             </div>
           )}
         </div>

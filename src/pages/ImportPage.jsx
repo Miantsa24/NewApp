@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { parseCsvFile, detectDelimiter, importMultiModule } from '../api/services/importService'
 import { detectModulesFromHeaders } from '../api/utils/detectModules'
 import { MODULES_CONFIG } from '../api/utils/modulesConfig'
+import { validateFile } from '../api/utils/validateImport'
 import './ImportPage.css'
 
 // ─── Constantes UI ────────────────────────────────────────────────────────────
@@ -113,6 +114,30 @@ const FileCard = ({ entry, onRemove, onDelimiterChange, disabled }) => {
               <span className="file-card-no-module">Aucun module détecté</span>
             )}
           </div>
+
+          {/* Résumé de validation */}
+          {entry.validation && (
+            <div className="file-validation">
+              {entry.validation.errors.length === 0 && entry.validation.warnings.length === 0 ? (
+                <span className="val-ok">
+                  <i className="ti ti-circle-check"></i> Fichier valide
+                </span>
+              ) : (
+                <>
+                  {entry.validation.errors.map((err, i) => (
+                    <span key={`e${i}`} className="val-error">
+                      <i className="ti ti-alert-circle"></i> {err.message}
+                    </span>
+                  ))}
+                  {entry.validation.warnings.map((w, i) => (
+                    <span key={`w${i}`} className="val-warning">
+                      <i className="ti ti-alert-triangle"></i> {w.message}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -188,7 +213,8 @@ const ImportPage = () => {
       const headers = Object.keys(rows[0])
       const detectionResults = detectModulesFromHeaders(headers)
       const selectedModules = detectionResults.filter(r => r.detected).map(r => r.moduleKey)
-      setFileEntries(prev => [...prev, { id, file, type: 'csv', delimiter, rows, headers, detectionResults, selectedModules }])
+      const validation = validateFile(rows, headers, selectedModules)
+      setFileEntries(prev => [...prev, { id, file, type: 'csv', delimiter, rows, headers, detectionResults, selectedModules, validation }])
     } catch (err) {
       setFileError(`Erreur de lecture : ${err.message}`)
     }
@@ -202,8 +228,9 @@ const ImportPage = () => {
       const headers = Object.keys(rows[0] || {})
       const detectionResults = detectModulesFromHeaders(headers)
       const selectedModules = detectionResults.filter(r => r.detected).map(r => r.moduleKey)
+      const validation = validateFile(rows, headers, selectedModules)
       setFileEntries(prev => prev.map(e =>
-        e.id === id ? { ...e, delimiter: newDelimiter, rows, headers, detectionResults, selectedModules } : e
+        e.id === id ? { ...e, delimiter: newDelimiter, rows, headers, detectionResults, selectedModules, validation } : e
       ))
     } catch (err) {
       setFileError(`Erreur re-parsing : ${err.message}`)
@@ -233,7 +260,8 @@ const ImportPage = () => {
   const moduleFileMap = {}
   plan.forEach(s => { moduleFileMap[s.moduleKey] = s.fileName })
 
-  const canImport = !importing && !globalReport && csvEntries.some(e => e.selectedModules.length > 0)
+  const hasBlockingErrors = csvEntries.some(e => e.validation?.errors?.length > 0)
+  const canImport = !importing && !globalReport && csvEntries.some(e => e.selectedModules.length > 0) && !hasBlockingErrors
 
   // ── Import ──────────────────────────────────────────────────────────────────
 

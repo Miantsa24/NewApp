@@ -17,8 +17,11 @@ const CANCELLED_OPTION = {
   color: '#64748b',
 }
 
-const getStateOptions = (stateId) => {
-  if (stateId === ORDER_STATES.IN_CART)          return [PAYMENT_OPTION, CANCELLED_OPTION]
+// stateName est utilisé pour détecter l'état "Dans le panier" via l'état PS créé à l'import
+const getStateOptions = (stateId, stateName) => {
+  const isInCart = stateId === ORDER_STATES.IN_CART
+    || (stateName || '').toLowerCase() === 'dans le panier'
+  if (isInCart)                                  return [PAYMENT_OPTION, CANCELLED_OPTION]
   if (stateId === ORDER_STATES.PAYMENT_ACCEPTED) return [CANCELLED_OPTION]
   if (stateId === ORDER_STATES.CANCELLED)        return [PAYMENT_OPTION]
   return [PAYMENT_OPTION, CANCELLED_OPTION]
@@ -105,7 +108,7 @@ const OrdersList = () => {
             const isUpdating        = updatingId === order.id
             const isOpen            = openDropdownId === order.id
             const hasError          = updateError?.id === order.id
-            const stateOptions      = getStateOptions(currentStateId)
+            const stateOptions      = getStateOptions(currentStateId, currentState)
 
             return (
               <tr key={order.id}>
