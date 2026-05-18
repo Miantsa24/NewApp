@@ -26,6 +26,29 @@ const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 300
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+// ─── Helpers prix / taxe ──────────────────────────────────────────────────────
+
+// Lecture d'un champ CSV insensible à la casse
+const getCsvFieldCi = (row, ...keys) => {
+  for (const key of keys) {
+    const v = row[key] ?? row[key[0].toUpperCase() + key.slice(1)] ?? row[key.toUpperCase()]
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim()
+  }
+  const lowerKeys = keys.map(k => k.toLowerCase())
+  for (const [k, v] of Object.entries(row)) {
+    if (lowerKeys.includes(k.toLowerCase()) && v !== undefined && v !== null && String(v).trim() !== '') {
+      return String(v).trim()
+    }
+  }
+  return ''
+}
+
+const parseCsvFloat = (str) => parseFloat(String(str || '0').replace(',', '.').trim()) || 0
+
+// "11,65%" → 0.1165  |  "5.60" → 0.056
+const parseTaxRate = (taxeStr) =>
+  parseCsvFloat(String(taxeStr || '0').replace('%', '')) / 100
+
 // ─── Helpers parsing réponse PrestaShop ───────────────────────────────────────
 
 const extractIdFromResponse = (responseData) => {
@@ -194,12 +217,27 @@ const importProductRows = async (rows, mapping, registry, onProgress) => {
     const row = rows[i]
     const ref = MODULES_CONFIG.products.registryKey(row)
     try {
+      // Extraire le taux de taxe du CSV (ex: "11,65%" → 0.1165)
+      const taxeRaw  = getCsvFieldCi(row, 'Taxe', 'taxe', 'TVA', 'tva', 'Tax', 'tax')
+      const taxRate  = parseTaxRate(taxeRaw)
+
+      // Extraire le prix TTC du CSV (pour le registre — le XML envoyé à PS utilise la valeur brute)
+      const prixTTCKey = Object.keys(row).find(k =>
+        ['prixttc', 'prix_ttc'].includes(k.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      )
+      const prixTTC = prixTTCKey ? parseCsvFloat(row[prixTTCKey]) : 0
+
+      // Envoyer prix_ttc tel quel — PS fait sa propre conversion TTC→HT en interne
       const xml = buildXmlFromMapping(row, 'products', mapping, registry)
       const resp = await postXml('products', xml)
       const id = extractIdFromResponse(resp)
       if (!id) throw new Error('ID produit non récupéré')
       const stockAvailableId = extractStockAvailableIdFromProductResponse(resp)
-      registry.set('products', ref, { id, stockAvailableId })
+
+      // HT calculé localement = ce que PS stockera (utilisé uniquement pour les deltas des déclinaisons)
+      const priceHT = taxRate > 0 ? prixTTC / (1 + taxRate) : prixTTC
+
+      registry.set('products', ref, { id, stockAvailableId, priceHT, taxRate })
       results.success++
     } catch (err) {
       results.errors.push({ line: i + 2, message: err.response?.data || err.message, row })
@@ -242,7 +280,7 @@ const importCombinationRows = async (rows, mapping, registry, onProgress) => {
     const ref = row['reference'] || row['Reference'] || ''
     const specificite = getSpecKey(row)
     const karazany = getValKey(row)
-    const prixTTC = getPrixKey(row)
+    const prixVenteTTCRaw = getPrixKey(row)
 
     const productEntry = registry.get('products', ref)
     if (!productEntry?.id) {
@@ -284,8 +322,16 @@ const importCombinationRows = async (rows, mapping, registry, onProgress) => {
       }
       const idOptionValue = optionValueRegistry.get('val', valKey).id
 
+      // delta TTC = prix de cette déclinaison − prix de base du produit
+      // buildCombinationXml(priceTTC_delta, taxRate_percent) calcule l'écart HT = deltaTTC / (1 + taxRate/100)
+      const prixVenteTTC  = parseCsvFloat(prixVenteTTCRaw)
+      const { priceHT: baseHT = 0, taxRate: baseTaxRate = 0 } = productEntry
+      const baseTTC    = baseHT * (1 + baseTaxRate)   // recompose le prix_ttc de base
+      const deltaTTC   = prixVenteTTC > 0 ? prixVenteTTC - baseTTC : 0
+      const taxRatePct = baseTaxRate * 100              // 0.1165 → 11.65
+
       const combiRef = `${ref}_${karazany}`
-      const combXml = buildCombinationXml(idProduct, [idOptionValue], prixTTC, null, combiRef)
+      const combXml = buildCombinationXml(idProduct, [idOptionValue], String(deltaTTC), taxRatePct, combiRef)
       const combResp = await postXml('combinations', combXml)
       const idCombination = extractIdFromResponse(combResp)
       if (!idCombination) throw new Error('ID combination non récupéré')

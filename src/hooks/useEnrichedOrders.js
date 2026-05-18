@@ -47,6 +47,8 @@ const useEnrichedOrders = () => {
           carriersData,
           orderDetailsData,
           productsData,
+          taxesData,
+          taxRulesData,
         ] = await Promise.all([
           fetchAll('orders'),
           fetchAll('carts'),
@@ -56,6 +58,8 @@ const useEnrichedOrders = () => {
           fetchAll('carriers'),
           fetchAll('order_details'),
           fetchAll('products'),
+          fetchAll('taxes'),
+          fetchAll('tax_rules'),
         ])
 
         const rawOrders       = toArray(ordersData?.prestashop?.orders?.order)
@@ -66,6 +70,23 @@ const useEnrichedOrders = () => {
         const rawCarriers     = toArray(carriersData?.prestashop?.carriers?.carrier)
         const rawOrderDetails = toArray(orderDetailsData?.prestashop?.order_details?.order_detail)
         const rawProducts     = toArray(productsData?.prestashop?.products?.product)
+        const rawTaxes        = toArray(taxesData?.prestashop?.taxes?.tax)
+        const rawTaxRules     = toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule)
+
+        // Map taux de taxe : tax_id → rate (%)
+        const taxRateById = {}
+        rawTaxes.forEach((t) => {
+          taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+        })
+        // Map groupe de taxe → rate (%)
+        const taxRateByGroup = {}
+        rawTaxRules.forEach((r) => {
+          const groupId = String(getVal(r.id_tax_rules_group))
+          const taxId   = String(getVal(r.id_tax))
+          if (!taxRateByGroup[groupId] && taxRateById[taxId] !== undefined) {
+            taxRateByGroup[groupId] = taxRateById[taxId]
+          }
+        })
 
         // Map client : id → nom complet
         const customerMap = {}
@@ -112,15 +133,16 @@ const useEnrichedOrders = () => {
           productCountMap[orderId] = (productCountMap[orderId] || 0) + qty
         })
 
-        // Map prix produit : id → { priceHT, priceTTC }
+        // Map prix produit : id → { priceHT, priceTTC } avec taux réel par produit
         const productPriceMap = {}
         rawProducts.forEach((p) => {
-          const id = String(getVal(p.id))
+          const id      = String(getVal(p.id))
           const priceHT = parseFloat(getVal(p.price) || 0)
-          const taxRuleId = getVal(p.id_tax_rules_group)
+          const groupId = String(getVal(p.id_tax_rules_group))
+          const taxRate = taxRateByGroup[groupId] || 0   // ex: 11.65
           productPriceMap[id] = {
             priceHT,
-            priceTTC: priceHT * (taxRuleId ? 1.20 : 1),
+            priceTTC: priceHT * (1 + taxRate / 100),
           }
         })
 

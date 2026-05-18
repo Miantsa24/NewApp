@@ -31,12 +31,14 @@ const useMyOrders = (customerId) => {
         setLoading(true)
         setError(null)
 
-        const [ordersRes, cartsRes, statesRes, currenciesRes, productsRes] = await Promise.all([
+        const [ordersRes, cartsRes, statesRes, currenciesRes, productsRes, taxesRes, taxRulesRes] = await Promise.all([
           axiosInstance.get(`/orders?display=full&filter[id_customer]=[${customerId}]`),
           axiosInstance.get(`/carts?display=full&filter[id_customer]=[${customerId}]`),
           axiosInstance.get('/order_states?display=full'),
           axiosInstance.get('/currencies?display=full'),
           axiosInstance.get('/products?display=full'),
+          axiosInstance.get('/taxes?display=full'),
+          axiosInstance.get('/tax_rules?display=full'),
         ])
 
         const rawOrders      = toArray(parseXML(ordersRes.data)?.prestashop?.orders?.order)
@@ -44,6 +46,22 @@ const useMyOrders = (customerId) => {
         const rawOrderStates = toArray(parseXML(statesRes.data)?.prestashop?.order_states?.order_state)
         const rawCurrencies  = toArray(parseXML(currenciesRes.data)?.prestashop?.currencies?.currency)
         const rawProducts    = toArray(parseXML(productsRes.data)?.prestashop?.products?.product)
+        const rawTaxes       = toArray(parseXML(taxesRes.data)?.prestashop?.taxes?.tax)
+        const rawTaxRules    = toArray(parseXML(taxRulesRes.data)?.prestashop?.tax_rules?.tax_rule)
+
+        // Map taux de taxe réels
+        const taxRateById = {}
+        rawTaxes.forEach((t) => {
+          taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+        })
+        const taxRateByGroup = {}
+        rawTaxRules.forEach((r) => {
+          const groupId = String(getVal(r.id_tax_rules_group))
+          const taxId   = String(getVal(r.id_tax))
+          if (!taxRateByGroup[groupId] && taxRateById[taxId] !== undefined) {
+            taxRateByGroup[groupId] = taxRateById[taxId]
+          }
+        })
 
         // Map état : id → { name, color }
         const stateMap = {}
@@ -68,13 +86,14 @@ const useMyOrders = (customerId) => {
           currencyMap[id] = getVal(c.iso_code) || '—'
         })
 
-        // Map prix produit : id → priceTTC
+        // Map prix produit : id → priceTTC avec taux réel par produit
         const productPriceMap = {}
         rawProducts.forEach((p) => {
-          const id = String(getVal(p.id))
+          const id      = String(getVal(p.id))
           const priceHT = parseFloat(getVal(p.price) || 0)
-          const taxRuleId = getVal(p.id_tax_rules_group)
-          productPriceMap[id] = priceHT * (taxRuleId ? 1.20 : 1)
+          const groupId = String(getVal(p.id_tax_rules_group))
+          const taxRate = taxRateByGroup[groupId] || 0
+          productPriceMap[id] = priceHT * (1 + taxRate / 100)
         })
 
         // Enrichir les commandes
