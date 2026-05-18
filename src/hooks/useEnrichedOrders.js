@@ -49,6 +49,7 @@ const useEnrichedOrders = () => {
           productsData,
           taxesData,
           taxRulesData,
+          combinationsData,
         ] = await Promise.all([
           fetchAll('orders'),
           fetchAll('carts'),
@@ -60,6 +61,7 @@ const useEnrichedOrders = () => {
           fetchAll('products'),
           fetchAll('taxes'),
           fetchAll('tax_rules'),
+          fetchAll('combinations'),
         ])
 
         const rawOrders       = toArray(ordersData?.prestashop?.orders?.order)
@@ -72,6 +74,18 @@ const useEnrichedOrders = () => {
         const rawProducts     = toArray(productsData?.prestashop?.products?.product)
         const rawTaxes        = toArray(taxesData?.prestashop?.taxes?.tax)
         const rawTaxRules     = toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule)
+        const rawCombinations = toArray(combinationsData?.prestashop?.combinations?.combination)
+
+        // Map des prix d'achat par déclinaison
+        const combinationWholesalePriceMap = {}
+        rawCombinations.forEach(combo => {
+          const comboId = combo.id
+          // Correction: Accéder à la valeur numérique du prix de gros qui est dans un objet
+          const wholesalePrice = parseFloat(combo.wholesale_price['#text'] || combo.wholesale_price || 0)
+          if (wholesalePrice > 0) {
+            combinationWholesalePriceMap[comboId] = wholesalePrice
+          }
+        })
 
         // Map taux de taxe : tax_id → rate (%)
         const taxRateById = {}
@@ -156,6 +170,15 @@ const useEnrichedOrders = () => {
           const totalHT    = parseFloat(getVal(order.total_paid_tax_excl) || 0)
           const totalTTC   = parseFloat(getVal(order.total_paid_tax_incl) || 0)
 
+          // Enrichir les lignes de commande avec le prix d'achat de la déclinaison
+          const enrichedOrderRows = toArray(order.associations?.order_rows?.order_row).map(row => {
+            const attributeId = String(getVal(row.product_attribute_id))
+            return {
+              ...row,
+              wholesale_price: combinationWholesalePriceMap[attributeId] || 0,
+            }
+          })
+
           return {
             id,
             type: 'order',
@@ -171,7 +194,7 @@ const useEnrichedOrders = () => {
             productCount: productCountMap[id] || 0,
             dateAdd: getVal(order.date_add)?.split(' ')[0] || '—',
             dateUpd: getVal(order.date_upd)?.split(' ')[0] || '—',
-            raw: order,
+            raw: { ...order, associations: { ...order.associations, order_rows: { order_row: enrichedOrderRows } } },
           }
         })
 

@@ -138,6 +138,10 @@ const useEnrichedProducts = () => {
             : null
 
           const reference = getVal(product.reference) || '—'
+          // Correction: Lire directement la valeur si c'est un nombre, sinon utiliser getVal
+          const wholesalePrice = typeof product.wholesale_price === 'number'
+            ? product.wholesale_price
+            : getVal(product.wholesale_price) || '0'
 
           const dateAddRaw = getVal(product.date_add)       // ← garder tel quel
           const badge = computeBadge(getVal(product.available_date))  // ← changer ici
@@ -150,10 +154,12 @@ const useEnrichedProducts = () => {
             reference,
             priceHT: priceHT.toFixed(2),
             priceTTC: priceTTC.toFixed(2),
+            wholesalePrice: parseFloat(wholesalePrice).toFixed(2),
             quantity,
             active: getVal(product.active),
             manufacturer,
             categoryDefault: defaultCategory?.name || '—',
+            categoryId: defaultCatId,
             categoryParent: parentCategory?.name || '—',
             imageUrl,
             badge,
