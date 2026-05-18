@@ -41,21 +41,39 @@ const useProductDetail = (productId) => {
           combinationsData,
           optionsData,
           optionValuesData,
+          taxesData,
+          taxRulesData,
         ] = await Promise.all([
           axiosInstance.get(`/products/${productId}?language=1`).then(r => parseXML(r.data)),
           fetchAll('stock_availables'),
           fetchAll('combinations'),
           fetchAll('product_options'),
           fetchAll('product_option_values'),
+          fetchAll('taxes'),
+          fetchAll('tax_rules'),
         ])
 
         const raw = productData?.prestashop?.product
         if (!raw) throw new Error('Produit introuvable')
 
+        // Map taux réels : tax_id → rate (%), group_id → rate
+        const taxRateById = {}
+        toArray(taxesData?.prestashop?.taxes?.tax).forEach(t => {
+          taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+        })
+        const taxRateByGroup = {}
+        toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule).forEach(r => {
+          const gid = String(getVal(r.id_tax_rules_group))
+          const tid = String(getVal(r.id_tax))
+          if (!taxRateByGroup[gid] && taxRateById[tid] !== undefined) taxRateByGroup[gid] = taxRateById[tid]
+        })
+
         const name = raw.name?.language?.['#text'] || raw.name?.language || '—'
         const description = raw.description?.language?.['#text'] || raw.description?.language || ''
-        const priceHT = parseFloat(getVal(raw.price) || 0)
-        const priceTTC = (priceHT * 1.20).toFixed(2)
+        const priceHT   = parseFloat(getVal(raw.price) || 0)
+        const groupId   = String(getVal(raw.id_tax_rules_group))
+        const taxRate   = taxRateByGroup[groupId] || 0   // ex: 11.65
+        const priceTTC  = (priceHT * (1 + taxRate / 100)).toFixed(2)
         const reference = getVal(raw.reference) || '—'
 
         // Détection pack via product_type ou cache_is_pack
@@ -161,8 +179,8 @@ const useProductDetail = (productId) => {
             return `${optionMap[value.optionId] || '—'}: ${value.name}`
           }).filter(Boolean).join(' / ') || '—'
 
-          const priceImpact = parseFloat(getVal(combo.price) || 0)
-          const comboPriceTTC = ((priceHT + priceImpact) * 1.20).toFixed(2)
+          const priceImpact   = parseFloat(getVal(combo.price) || 0)
+          const comboPriceTTC = ((priceHT + priceImpact) * (1 + taxRate / 100)).toFixed(2)
           const qty = stockByCombo[id] ?? 0
 
           return { id, attributeLabel, priceImpact, priceTTC: comboPriceTTC, quantity: qty }

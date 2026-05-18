@@ -48,21 +48,36 @@ const useEnrichedProducts = () => {
           productsData,
           categoriesData,
           stockData,
+          taxesData,
           taxRulesData,
           manufacturersData,
         ] = await Promise.all([
           fetchAll('products'),
           fetchAll('categories'),
           fetchAll('stock_availables'),
-          fetchAll('tax_rule_groups'),
+          fetchAll('taxes'),
+          fetchAll('tax_rules'),
           fetchAll('manufacturers'),
         ])
 
         const rawProducts      = toArray(productsData?.prestashop?.products?.product)
         const rawCategories    = toArray(categoriesData?.prestashop?.categories?.category)
         const rawStock         = toArray(stockData?.prestashop?.stock_availables?.stock_available)
-        const rawTaxRules      = toArray(taxRulesData?.prestashop?.tax_rule_groups?.tax_rule_group)
+        const rawTaxes         = toArray(taxesData?.prestashop?.taxes?.tax)
+        const rawTaxRules      = toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule)
         const rawManufacturers = toArray(manufacturersData?.prestashop?.manufacturers?.manufacturer)
+
+        // Map taux réels : tax_id → rate (%), group_id → rate (%)
+        const taxRateById = {}
+        rawTaxes.forEach(t => {
+          taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+        })
+        const taxRateByGroup = {}
+        rawTaxRules.forEach(r => {
+          const gid = String(getVal(r.id_tax_rules_group))
+          const tid = String(getVal(r.id_tax))
+          if (!taxRateByGroup[gid] && taxRateById[tid] !== undefined) taxRateByGroup[gid] = taxRateById[tid]
+        })
 
         const categoryMap = {}
         rawCategories.forEach((cat) => {
@@ -100,10 +115,10 @@ const useEnrichedProducts = () => {
             || product.name?.language
             || '—'
 
-          const priceHT = parseFloat(getVal(product.price) || 0)
-          const taxRuleId = getVal(product.id_tax_rules_group)
-          const taxRate = taxRuleId ? 0.20 : 0
-          const priceTTC = priceHT * (1 + taxRate)
+          const priceHT   = parseFloat(getVal(product.price) || 0)
+          const groupId   = String(getVal(product.id_tax_rules_group))
+          const taxRate   = (taxRateByGroup[groupId] || 0) / 100  // ex: 0.1165
+          const priceTTC  = priceHT * (1 + taxRate)
 
           const defaultCatId = getVal(product.id_category_default)
           const defaultCategory = categoryMap[defaultCatId] || null

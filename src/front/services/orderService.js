@@ -196,22 +196,38 @@ export const loadCartFromPs = async (customerId) => {
   const psUrl = import.meta.env.VITE_PRESTASHOP_URL
 
   // 1. Carts du client + commandes pour filtrer les carts déjà convertis
-  const [cartsResp, ordersResp, productsResp, combsResp] = await Promise.all([
+  const [cartsResp, ordersResp, productsResp, combsResp, taxesResp, taxRulesResp] = await Promise.all([
     axiosInstance.get(`/carts?display=full&filter[id_customer]=[${customerId}]`),
     axiosInstance.get(`/orders?display=full&filter[id_customer]=[${customerId}]`),
     axiosInstance.get('/products?display=full'),
     axiosInstance.get('/combinations?display=full'),
+    axiosInstance.get('/taxes?display=full'),
+    axiosInstance.get('/tax_rules?display=full'),
   ])
 
   const cartsData    = (await import('../../api/xmlParser')).parseXML(cartsResp.data)
   const ordersData   = (await import('../../api/xmlParser')).parseXML(ordersResp.data)
   const productsData = (await import('../../api/xmlParser')).parseXML(productsResp.data)
   const combsData    = (await import('../../api/xmlParser')).parseXML(combsResp.data)
+  const taxesData    = (await import('../../api/xmlParser')).parseXML(taxesResp.data)
+  const taxRulesData = (await import('../../api/xmlParser')).parseXML(taxRulesResp.data)
 
   const rawCarts    = toArray(cartsData?.prestashop?.carts?.cart)
   const rawOrders   = toArray(ordersData?.prestashop?.orders?.order)
   const rawProducts = toArray(productsData?.prestashop?.products?.product)
   const rawCombs    = toArray(combsData?.prestashop?.combinations?.combination)
+
+  // Map taux de taxe réels : tax_id → rate, group_id → rate
+  const taxRateById = {}
+  toArray(taxesData?.prestashop?.taxes?.tax).forEach(t => {
+    taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+  })
+  const taxRateByGroup = {}
+  toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule).forEach(r => {
+    const gid = String(getVal(r.id_tax_rules_group))
+    const tid = String(getVal(r.id_tax))
+    if (!taxRateByGroup[gid] && taxRateById[tid] !== undefined) taxRateByGroup[gid] = taxRateById[tid]
+  })
 
   // Carts déjà convertis en commande
   const convertedIds = new Set(rawOrders.map(o => String(getVal(o.id_cart))))
@@ -230,44 +246,51 @@ export const loadCartFromPs = async (customerId) => {
   const currencyId   = String(getVal(activeCart.id_currency) || '1')
   const rows         = toArray(activeCart?.associations?.cart_rows?.cart_row)
 
-  // Maps produits et combinaisons
+  // Maps produits et combinaisons avec taux de taxe réels
   const productMap = {}
   rawProducts.forEach(p => {
-    const id = String(getVal(p.id))
+    const id      = String(getVal(p.id))
     const priceHT = parseFloat(getVal(p.price) || 0)
-    const taxRuleId = getVal(p.id_tax_rules_group)
-    const hasTax = taxRuleId && String(taxRuleId) !== '0'
-    const priceTTC = priceHT * (hasTax ? 1.20 : 1)
+    const groupId = String(getVal(p.id_tax_rules_group))
+    const taxRate = taxRateByGroup[groupId] || 0
     const imageId = getVal(p.id_default_image)
-    const name = p.name?.language?.['#text'] || p.name?.language
+    const name    = p.name?.language?.['#text'] || p.name?.language
     productMap[id] = {
-      name: typeof name === 'object' ? String(Object.values(name)[0] || '') : String(name || '—'),
-      price: priceTTC.toFixed(2),
+      name:    typeof name === 'object' ? String(Object.values(name)[0] || '') : String(name || '—'),
+      priceHT,
+      taxRate,
       imageUrl: imageId ? `${psUrl}/api/images/products/${id}/${imageId}` : null,
     }
   })
 
+  // combMap : id → { reference, priceDelta (HT) }
   const combMap = {}
   rawCombs.forEach(c => {
     const id = String(getVal(c.id))
-    combMap[id] = getVal(c.reference) || `Décl.#${id}`
+    combMap[id] = {
+      reference:  getVal(c.reference) || `Décl.#${id}`,
+      priceDelta: parseFloat(getVal(c.price) || 0),
+    }
   })
 
-  // Construire les items au format cart localStorage
+  // Construire les items au format cart localStorage avec prix TTC correct
   const items = rows.map(row => {
-    const productId    = String(getVal(row.id_product))
+    const productId     = String(getVal(row.id_product))
     const combinationId = String(getVal(row.id_product_attribute) || '0')
-    const qty          = parseInt(getVal(row.quantity) || 1)
-    const hasComb      = combinationId && combinationId !== '0'
-    const prod         = productMap[productId] || { name: `#${productId}`, price: '0.00', imageUrl: null }
+    const qty           = parseInt(getVal(row.quantity) || 1)
+    const hasComb       = combinationId && combinationId !== '0'
+    const prod          = productMap[productId] || { name: `#${productId}`, priceHT: 0, taxRate: 0, imageUrl: null }
+    const comb          = hasComb ? combMap[combinationId] : null
+    const effectiveHT   = prod.priceHT + (comb?.priceDelta || 0)
+    const effectiveTTC  = (effectiveHT * (1 + prod.taxRate / 100)).toFixed(2)
 
     return {
       itemId:         hasComb ? `${productId}_${combinationId}` : productId,
       productId,
       combinationId:  hasComb ? combinationId : null,
       name:           prod.name,
-      attributeLabel: hasComb ? (combMap[combinationId] || null) : null,
-      price:          prod.price,
+      attributeLabel: hasComb ? (comb?.reference || null) : null,
+      price:          effectiveTTC,
       imageUrl:       prod.imageUrl,
       qty,
     }
@@ -501,25 +524,39 @@ export const loadDansPanierOrderFromPs = async (customerId) => {
   const carrierId  = String(getVal(pendingOrder.id_carrier) || '1')
   const currencyId = String(getVal(pendingOrder.id_currency) || '1')
 
-  const [detailsResp, productsResp] = await Promise.all([
+  const [detailsResp, productsResp, taxesResp2, taxRulesResp2] = await Promise.all([
     axiosInstance.get(`/order_details?display=full&filter[id_order]=[${orderId}]`),
     axiosInstance.get('/products?display=full'),
+    axiosInstance.get('/taxes?display=full'),
+    axiosInstance.get('/tax_rules?display=full'),
   ])
 
   const rawDetails  = toArray(parseXML(detailsResp.data)?.prestashop?.order_details?.order_detail)
   const rawProducts = toArray(parseXML(productsResp.data)?.prestashop?.products?.product)
 
+  const txById = {}
+  toArray(parseXML(taxesResp2.data)?.prestashop?.taxes?.tax).forEach(t => {
+    txById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
+  })
+  const txByGroup = {}
+  toArray(parseXML(taxRulesResp2.data)?.prestashop?.tax_rules?.tax_rule).forEach(r => {
+    const gid = String(getVal(r.id_tax_rules_group))
+    const tid = String(getVal(r.id_tax))
+    if (!txByGroup[gid] && txById[tid] !== undefined) txByGroup[gid] = txById[tid]
+  })
+
   const productMap = {}
   rawProducts.forEach(p => {
-    const id = String(getVal(p.id))
+    const id      = String(getVal(p.id))
     const priceHT = parseFloat(getVal(p.price) || 0)
-    const taxRuleId = getVal(p.id_tax_rules_group)
-    const hasTax = taxRuleId && String(taxRuleId) !== '0'
+    const groupId = String(getVal(p.id_tax_rules_group))
+    const taxRate = txByGroup[groupId] || 0
     const imageId = getVal(p.id_default_image)
     const nameRaw = p.name?.language?.['#text'] || p.name?.language
     productMap[id] = {
-      name: typeof nameRaw === 'object' ? String(Object.values(nameRaw)[0] || '') : String(nameRaw || '—'),
-      price: (priceHT * (hasTax ? 1.20 : 1)).toFixed(2),
+      name:    typeof nameRaw === 'object' ? String(Object.values(nameRaw)[0] || '') : String(nameRaw || '—'),
+      priceHT,
+      taxRate,
       imageUrl: imageId ? `${psUrl}/api/images/products/${id}/${imageId}` : null,
     }
   })
@@ -529,14 +566,19 @@ export const loadDansPanierOrderFromPs = async (customerId) => {
     const combinationId = String(getVal(detail.product_attribute_id) || '0')
     const qty           = parseInt(getVal(detail.product_quantity) || 1)
     const hasComb       = combinationId && combinationId !== '0'
-    const prod          = productMap[productId] || { name: `#${productId}`, price: '0.00', imageUrl: null }
+    const prod          = productMap[productId] || { name: `#${productId}`, priceHT: 0, taxRate: 0, imageUrl: null }
+    // Pour les détails de commande, le prix unitaire stocké dans order_detail peut être utilisé directement
+    const unitPriceTTC = parseFloat(String(getVal(detail.unit_price_tax_incl) || '0').replace(',', '.'))
+    const price = unitPriceTTC > 0
+      ? unitPriceTTC.toFixed(2)
+      : (prod.priceHT * (1 + prod.taxRate / 100)).toFixed(2)
     return {
       itemId:         hasComb ? `${productId}_${combinationId}` : productId,
       productId,
       combinationId:  hasComb ? combinationId : null,
       name:           prod.name,
       attributeLabel: null,
-      price:          prod.price,
+      price,
       imageUrl:       prod.imageUrl,
       qty,
     }
