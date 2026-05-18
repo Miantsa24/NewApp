@@ -629,6 +629,36 @@ const buildImportOrderXml = (idCustomer, idAddress, cartId, carrierId, currencyI
   </order>
 </prestashop>`
 
+// Re-incrémente le stock pour les commandes "Dans le panier".
+// PS décrémente automatiquement le stock via validateOrder() à la création de TOUT ordre.
+// Pour "Dans le panier" ce décréement ne doit pas encore avoir lieu → on annule.
+// Pour "Paiement accepté" PS a déjà décrémenté correctement → on ne touche pas.
+const reIncrementStockForOrderItems = async (resolvedItems) => {
+  for (const item of resolvedItems) {
+    try {
+      const combId = (item.idCombination && item.idCombination !== '0') ? item.idCombination : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.idProduct}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const parsed  = parseXML(resp.data)
+      const raw     = parsed?.prestashop?.stock_availables?.stock_available
+      const stock   = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) {
+        console.warn(`[Import] Stock introuvable pour produit ${item.idProduct} / déclinaison ${combId}`)
+        continue
+      }
+      const stockId    = getVal(stock.id)
+      const currentQty = parseInt(getVal(stock.quantity) || '0', 10)
+      const newQty     = currentQty + item.quantity  // ré-incrément : annule le décréement PS
+      const xml        = buildStockUpdateXml(stockId, item.idProduct, String(newQty), combId)
+      await putXml('stock_availables', stockId, xml)
+      console.log(`[Import] Stock P${item.idProduct}/D${combId}: ${currentQty} → ${newQty} (ré-incrément panier)`)
+    } catch (err) {
+      console.warn(`[Import] Ré-incrément stock P${item.idProduct}:`, err.message)
+    }
+  }
+}
+
 const importOrderRows = async (rows, mapping, registry, onProgress) => {
   const total = rows.length
   const results = { success: 0, errors: [], skipped: 0 }
@@ -897,6 +927,13 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
             console.warn(`Import: date_add non corrigée pour commande #${orderId}:`, dateErr.message)
           }
         }
+      }
+
+      // PS décrémente le stock automatiquement à la création de tout ordre (validateOrder).
+      // Pour "Dans le panier" : annuler ce décréement PS (la commande n'est pas encore validée).
+      // Pour "Paiement accepté" : PS a déjà décrémenté correctement, on ne fait rien.
+      if (stateId === null && dansPanierStateId) {
+        await reIncrementStockForOrderItems(resolvedItems)
       }
 
       results.success++

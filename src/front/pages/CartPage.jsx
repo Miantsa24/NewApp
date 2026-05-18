@@ -16,6 +16,7 @@ import {
   loadCartFromPs,
   loadDansPanierOrderFromPs,
   confirmDansPanierOrder,
+  decrementStockForItems,
 } from '../services/orderService'
 import './CartPage.css'
 
@@ -192,6 +193,7 @@ const CartPage = () => {
       setSubmitError(null)
       try {
         const { orderId, reference } = await confirmDansPanierOrder(psCartInfo.orderId)
+        await decrementStockForItems(cart)
         clearPsCart(user.id)
         persist([])
         setCart([])
@@ -284,6 +286,7 @@ const CartPage = () => {
         existingCartSecureKey:  psCartInfo?.cartSecureKey,
       })
 
+      // PS a déjà décrémenté le stock via validateOrder() lors de la création de la commande
       clearPsCart(user.id)
       persist([])
       setCart([])

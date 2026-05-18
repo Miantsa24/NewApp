@@ -546,6 +546,49 @@ export const loadDansPanierOrderFromPs = async (customerId) => {
   return { orderId, reference, carrierId, currencyId, items }
 }
 
+const buildStockXml = (stockId, productId, quantity, combinationId) =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id>${stockId}</id>
+    <id_product>${productId}</id_product>
+    <id_product_attribute>${combinationId}</id_product_attribute>
+    <id_shop>1</id_shop>
+    <id_shop_group>0</id_shop_group>
+    <quantity>${quantity}</quantity>
+    <depends_on_stock>0</depends_on_stock>
+    <out_of_stock>1</out_of_stock>
+  </stock_available>
+</prestashop>`
+
+/**
+ * Décrémente le stock PS pour chaque article du panier.
+ * Appelé après validation d'une commande (état → Paiement accepté).
+ * Les commandes "Dans le panier" ne déclenchent PAS cette fonction.
+ */
+export const decrementStockForItems = async (items) => {
+  for (const item of items) {
+    try {
+      const combId = (item.combinationId && item.combinationId !== '0') ? item.combinationId : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.productId}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const data   = parseXML(resp.data)
+      const raw    = data?.prestashop?.stock_availables?.stock_available
+      const stock  = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) continue
+      const stockId    = String(getVal(stock.id))
+      const currentQty = parseInt(getVal(stock.quantity) || '0', 10)
+      const newQty     = Math.max(0, currentQty - item.qty)
+      await axiosInstance.put(`/stock_availables/${stockId}`, buildStockXml(stockId, item.productId, newQty, combId), {
+        headers: { 'Content-Type': 'application/xml' },
+      })
+    } catch (err) {
+      console.warn(`Stock decrement failed for product ${item.productId}:`, err.message)
+    }
+  }
+}
+
 /**
  * Confirme une commande "Dans le panier" en passant son état à "Paiement accepté" (state 2).
  * Utilisé quand le client finalise une commande importée depuis CartPage.
