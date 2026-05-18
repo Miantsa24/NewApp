@@ -39,11 +39,13 @@ src/
 │   │   ├── categoriesService.js  ← GET, DELETE catégories
 │   │   ├── combinationsService.js← GET, DELETE déclinaisons
 │   │   └── stockService.js       ← GET stock
+│   │   └── stockMovementService.js       ← GET stock mouvement
 │   │   └── authService.js        ← GET employees : login, logout, JWT, getCurrentUser
 │   └── utils/
 │       ├── modulesConfig.js      ← config centralisée tous les modules
 │       ├── detectModules.js      ← detection automatique des modules lors de l'import
 │       └── csvToXml.js           ← conversion CSV row → XML PrestaShop
+│       └── validateImport.js          ← validation du fichier import
 │
 ├── hooks/
 │   ├── useAuth.js          ← hook générique display=full
@@ -64,6 +66,7 @@ src/
 │   ├── CategoriesList.jsx        ← tableau catégories arborescentes
 │   ├── CombinationsList.jsx      ← tableau déclinaisons enrichies
 │   ├── StockList.jsx             ← tableau stock enrichi
+│   ├── ResetModuleItem.jsx            ← reinitialisation
 │   └── List.css                  ← styles partagés tous les tableaux
 │
 └── pages/
@@ -71,6 +74,9 @@ src/
     ├── LoginPage.jsx + .css      ← formulaire login prérempli
     ├── ImportPage.jsx + .css     ← import CSV multi-étapes
     └── ResetPage.jsx + .css      ← réinitialisation par module
+    └── StockEntryPage.jsx + .css      ← ajout de stock
+    └── StockHistoryPage.jsx + .css      ← historique 
+    
 
 Ce qu'on a implémenté
 1. Connexion PrestaShop ↔ NewApp : A voir
@@ -162,6 +168,8 @@ src/
 │       ├── ProductPage.jsx     ← page fiche produit
 │       ├── ShopPage.css   ← liste produit css
 │       ├── ShopPage.jsx   ← page liste produit
+│       ├── MyOrdersPage.jsx   ← page liste produit
+│       ├── OrderConfirmPage.jsx   ← page liste produit
 
 # AVANCEMENT PROJET — J1 & J2
 

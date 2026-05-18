@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axiosInstance from '../api/axiosInstance'
 import { parseXML } from '../api/xmlParser'
-import { getStockMovements } from '../api/services/stockService'
+import { getStockMovements } from '../api/services/stockMovementService'
 
 export const getVal = (field) => {
   if (field === null || field === undefined) return null
@@ -42,7 +42,7 @@ const useStockMovements = (productId, combinationId = 0) => {
         setLoading(true)
         setError(null)
 
-        // Mouvements : endpoint custom (lit ps_stock_mvt, déjà filtré par produit/déclinaison)
+        // Mouvements : WS PS /stock_movements filtrés par id_stock (= id_stock_available)
         // Enrichissements : WS PS pour noms produit, raisons, références déclinaisons
         const [rawMovements, productsData, reasonsData, combinationsData] = await Promise.all([
           getStockMovements(productId, combinationId),
@@ -96,27 +96,16 @@ const useStockMovements = (productId, combinationId = 0) => {
           })
         }
 
-        // Filtrage par produit + déclinaison
-        const targetCombinationId = String(combinationId || 0)
-        const filtered = rawMovements.filter((m) => {
-          const mvProductId  = String(getVal(m.id_product))
-          const mvAttrId     = String(getVal(m.id_product_attribute) || 0)
-          return mvProductId === String(productId) && mvAttrId === targetCombinationId
-        })
-
-        // Enrichissement
-        const enriched = filtered.map((m) => {
+        // Les mouvements sont déjà filtrés par id_stock côté WS PS — pas de post-filtre nécessaire.
+        // id_product / id_product_attribute sont nuls dans le résultat WS (join ps_stock absent),
+        // on utilise les params productId / combinationId directement.
+        const enriched = rawMovements.map((m) => {
           const id           = String(getVal(m.id))
           const reasonId     = String(getVal(m.id_stock_mvt_reason))
           const reason       = reasonMap[reasonId] || { name: '—', sign: 0 }
           const physicalQty  = parseInt(getVal(m.physical_quantity) || 0)
           const sign         = parseInt(getVal(m.sign) || reason.sign || 0)
           const dateAdd      = getVal(m.date_add) || ''
-          // Nom employé depuis les champs retournés par le custom endpoint
-          const employeeName = [
-            m.employee_firstname || '',
-            m.employee_lastname  || '',
-          ].filter(Boolean).join(' ') || null
 
           // delta signé : entrée positive, sortie négative
           const delta = sign >= 0 ? physicalQty : -physicalQty
@@ -124,14 +113,14 @@ const useStockMovements = (productId, combinationId = 0) => {
 
           return {
             id,
-            productId:     String(getVal(m.id_product)),
-            combinationId: String(getVal(m.id_product_attribute) || 0),
+            productId:     String(productId),
+            combinationId: String(combinationId || 0),
             dateAdd,
             quantity:      Math.abs(delta),
             delta,
             isEntry,
             reasonName:    reason.name,
-            employeeId:    employeeName,
+            employeeId:    getVal(m.id_employee) || null,
             raw: m,
           }
         })

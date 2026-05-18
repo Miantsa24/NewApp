@@ -173,9 +173,4 @@ Styling : Création des fichiers CSS pour chaque composant afin d'assurer une in
 Documentation : Rédaction de la documentation du projet pour expliquer l'architecture et les flux.
 Génère maintenant le contenu du fichier CSV en respectant scrupuleusement le format et les instructions ci-dessus. Commence par la ligne d'en-têtes.
 
-Ok maintenant on va toucher un peu au dashboard, on va rajouter sur la premiere partie la ou il y a les card : produits, clients, commandes, ...
-On va remplacer cela par 3 colonnes: Une colonne ou on affiche trois card qui concerne seuelemnt els commandes avec etat "paiemente accepte: Total TTC, Total HT, Total commande (avec etat paiement accepte ) Une colonne ou on affiche trois card qui concerne seuelemnt les paniers avec etat "dans le panier ou vide: Total TTC, Total HT, Total panier(avec etat dans le panier ou vide). et une derniere colonne ou on affiche trois card qui concerne le total des commandes et des paniers (avec etat paiement accepte et dans le panier pas de annule): Total TTC commande + paniers, Total H commande + paniersT, Total commande + total paniers
-Puis 3 autres card independants qui affiche respectivement: le montant total des ventes , le montant total d’achat, et le bénéfice par catégorie de produit
-
-Des que tu auras compris tu peux commencer l'implemenation
 

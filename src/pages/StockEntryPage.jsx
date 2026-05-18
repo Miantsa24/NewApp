@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useEnrichedStock from '../hooks/useEnrichedStock'
 import useEnrichedProducts from '../hooks/useEnrichedProducts'
-import { addStock } from '../api/services/stockService'
+import { addStock } from '../api/services/stockMovementService'
 import './StockEntryPage.css'
 
 const StockEntryPage = () => {
@@ -16,7 +16,6 @@ const StockEntryPage = () => {
   const [quantity, setQuantity] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState(null)
-  const [refreshTick, setRefreshTick] = useState(0)
 
   const loading = loadingS || loadingP
 
@@ -39,7 +38,7 @@ const StockEntryPage = () => {
         (s.combinationRef || '').toLowerCase().includes(q)
       )
     })
-  }, [stock, search, onlyOutOfStock, refreshTick])
+  }, [stock, search, onlyOutOfStock])
 
   const [overrides, setOverrides] = useState({})
 
@@ -81,7 +80,7 @@ const StockEntryPage = () => {
     setFeedback(null)
 
     try {
-      const result = await addStock(modal.id, qty)
+      const result = await addStock(modal.productId, modal.combinationId || 0, qty)
       setOverrides(prev => ({ ...prev, [modal.id]: result.newQuantity }))
       setFeedback({
         type: 'success',
