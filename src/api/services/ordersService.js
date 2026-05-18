@@ -10,6 +10,28 @@ export const ORDER_STATES = {
   DELIVERED:        '5',     // Livré
 }
 
+/**
+ * Appelle le module mon_order_state pour changer l'état d'une commande.
+ * Gère les transitions autorisées (payé→livré, payé→annulé, panier→annulé).
+ * PS exécute automatiquement les effets de bord : stock, historique, emails.
+ */
+export const changeOrderState = async (orderId, newStateId) => {
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_state_update>
+    <id_order>${orderId}</id_order>
+    <id_order_state>${newStateId}</id_order_state>
+    <date_add>${now}</date_add>
+  </order_state_update>
+</prestashop>`
+
+  const response = await axiosInstance.post('/order_state_update', xml, {
+    headers: { 'Content-Type': 'application/xml' },
+  })
+  return parseXML(response.data)
+}
+
 export const getAllOrders = async () => {
   const response = await axiosInstance.get('/orders')
   return parseXML(response.data)
