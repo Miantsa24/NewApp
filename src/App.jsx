@@ -3,7 +3,7 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
-// import ProductList from './components/ProductList'
+import ProductList from './components/ProductList'
 // import CategoriesList from './components/CategoriesList'
 // import CombinationsList from './components/CombinationsList'
 // import StockList from './components/StockList'
@@ -45,8 +45,8 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/"             element={<Dashboard />} />
-                {/* <Route path="/products"     element={<ProductList />} />
-                <Route path="/categories"   element={<CategoriesList />} /> */}
+                <Route path="/products"     element={<ProductList />} />
+                {/* <Route path="/categories"   element={<CategoriesList />} /> */}
                 {/* <Route path="/combinations" element={<CombinationsList />} />
                 <Route path="/stock"        element={<StockList />} /> */}
                 {/* <Route path="/customers"    element={<CustomersList />} /> */}
