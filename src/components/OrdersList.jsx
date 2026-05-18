@@ -97,6 +97,7 @@ const OrdersList = () => {
             <th>Produits</th>
             <th>État</th>
             <th>Date</th>
+            <th>Modifié le</th>
           </tr>
         </thead>
         <tbody>
@@ -181,6 +182,7 @@ const OrdersList = () => {
                 </td>
 
                 <td className="date-cell">{order.dateAdd}</td>
+                <td className="date-cell">{order.dateUpd || '—'}</td>
               </tr>
             )
           })}

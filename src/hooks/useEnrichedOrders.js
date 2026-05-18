@@ -148,6 +148,7 @@ const useEnrichedOrders = () => {
             totalTTC: totalTTC.toFixed(2),
             productCount: productCountMap[id] || 0,
             dateAdd: getVal(order.date_add)?.split(' ')[0] || '—',
+            dateUpd: getVal(order.date_upd)?.split(' ')[0] || '—',
             raw: order,
           }
         })

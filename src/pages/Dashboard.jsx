@@ -144,6 +144,7 @@ const Dashboard = () => {
                     <th>Client</th>
                     <th>Montant</th>
                     <th>État</th>
+                    <th>Modifié le</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,6 +162,7 @@ const Dashboard = () => {
                           {o.state}
                         </span>
                       </td>
+                      <td className="muted">{o.dateUpd || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -192,17 +194,23 @@ const Dashboard = () => {
                   <th>Qté</th>
                   <th>États</th>
                   <th>Montant TTC</th>
+                  <th>Dern. modif.</th>
                 </tr>
               </thead>
               <tbody>
                 {days.map(([day, data]) => {
-                  // Grouper les états de la journée en badges condensés
                   const stateCounts = {}
                   data.orders.forEach(o => {
                     const key = o.state
                     if (!stateCounts[key]) stateCounts[key] = { count: 0, color: o.stateColor }
                     stateCounts[key].count++
                   })
+                  // Date de modification la plus récente parmi les commandes du jour
+                  const lastModif = data.orders
+                    .map(o => o.dateUpd || '')
+                    .filter(Boolean)
+                    .sort()
+                    .at(-1) || '—'
                   return (
                     <tr key={day} className={day === today ? 'row-today' : ''}>
                       <td>
@@ -232,6 +240,7 @@ const Dashboard = () => {
                         </div>
                       </td>
                       <td className="price">{data.total.toFixed(2)} €</td>
+                      <td className="muted">{lastModif}</td>
                     </tr>
                   )
                 })}
@@ -243,6 +252,7 @@ const Dashboard = () => {
                   <td><strong>{relevantOrders.reduce((s, o) => s + parseInt(o.productCount || 0), 0)}</strong></td>
                   <td></td>
                   <td className="price"><strong>{stats.totalRevenue} €</strong></td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -292,6 +302,7 @@ const Dashboard = () => {
                     <th>Montant HT</th>
                     <th>Montant TTC</th>
                     <th>État</th>
+                    <th>Modifié le</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -311,6 +322,7 @@ const Dashboard = () => {
                           {o.state}
                         </span>
                       </td>
+                      <td className="muted">{o.dateUpd || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
