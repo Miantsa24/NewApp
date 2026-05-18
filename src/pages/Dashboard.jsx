@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import useEnrichedProducts from '../hooks/useEnrichedProducts'
-import useEnrichedCustomers from '../hooks/useEnrichedCustomers'
 import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import useEnrichedStock from '../hooks/useEnrichedStock'
 import './Dashboard.css'
@@ -12,31 +10,44 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [searchDate, setSearchDate] = useState('')
 
-  const { products, loading: loadingP } = useEnrichedProducts()
-  const { customers, loading: loadingC } = useEnrichedCustomers()
-  const { orders,    loading: loadingO } = useEnrichedOrders()
-  const { stock,     loading: loadingS } = useEnrichedStock()
+  const { orders, loading: loadingO } = useEnrichedOrders()
+  const { stock,  loading: loadingS } = useEnrichedStock()
 
-  const loading = loadingP || loadingC || loadingO || loadingS
+  const loading = loadingO || loadingS
 
   const stats = {
-    totalProducts:  products.length,
-    activeProducts: products.filter(p => p.active == 1).length,
-    totalCustomers: customers.length,
-    activeCustomers:customers.filter(c => c.active == 1).length,
-    totalOrders:    orders.length,
-    totalRevenue:   orders.reduce((s, o) => s + parseFloat(o.totalTTC || 0), 0).toFixed(2),
-    outOfStock:     stock.filter(s => s.outOfStock).length,
-    lowStock:       stock.filter(s => s.lowStock).length,
+    outOfStock: stock.filter(s => s.outOfStock).length,
+    lowStock:   stock.filter(s => s.lowStock).length,
   }
 
-  // Seuls les états pertinents pour le dashboard
-  const DASHBOARD_STATES = ['cart', '2'] // dans le panier (virtuel) + paiement accepté
-  const relevantOrders = orders.filter(o =>
-    DASHBOARD_STATES.includes(o.stateId)
-    || o.type === 'cart'
-    || (o.state || '').toLowerCase() === 'dans le panier'
-  )
+  // ── Filtres états ──────────────────────────────────────────────────────────
+  const isPaiementAccepte = (o) => o.stateId === '2'
+  const isDansPanier      = (o) =>
+    o.stateId === 'cart' || o.type === 'cart' || (o.state || '').toLowerCase() === 'dans le panier'
+
+  const paOrders     = orders.filter(isPaiementAccepte)
+  const panierOrders = orders.filter(isDansPanier)
+
+  const sum = (arr, field) => arr.reduce((s, o) => s + parseFloat(o[field] || 0), 0)
+
+  const pa = {
+    ttc:   sum(paOrders, 'totalTTC').toFixed(2),
+    ht:    sum(paOrders, 'totalHT').toFixed(2),
+    count: paOrders.length,
+  }
+  const panier = {
+    ttc:   sum(panierOrders, 'totalTTC').toFixed(2),
+    ht:    sum(panierOrders, 'totalHT').toFixed(2),
+    count: panierOrders.length,
+  }
+  const total = {
+    ttc:   (parseFloat(pa.ttc) + parseFloat(panier.ttc)).toFixed(2),
+    ht:    (parseFloat(pa.ht)  + parseFloat(panier.ht)).toFixed(2),
+    count: pa.count + panier.count,
+  }
+
+  // États pertinents pour "par jour" et recherche
+  const relevantOrders = orders.filter(o => isPaiementAccepte(o) || isDansPanier(o))
 
   // "Aujourd'hui" : uniquement les items avec date_add = aujourd'hui
   // (dans le panier OU paiement accepté, mais seulement s'ils datent d'aujourd'hui)
@@ -65,43 +76,75 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
 
-      {/* 4 badges */}
-      <div className="stats-grid">
-        <div className="stat-card stat-blue" onClick={() => navigate('/products')} style={{ cursor: 'pointer' }}>
-          <div className="stat-card-top">
-            <span className="stat-label">Produits</span>
-            <div className="stat-icon"><i className="ti ti-box"></i></div>
+      {/* 3 colonnes financières */}
+      <div className="finance-grid">
+
+        {/* Colonne 1 — Paiement accepté */}
+        <div className="finance-col finance-col-green">
+          <p className="finance-col-title">
+            <i className="ti ti-circle-check"></i>
+            Commandes payées
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Total TTC</span>
+              <span className="finance-value">{loading ? '…' : `${pa.ttc} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Total HT</span>
+              <span className="finance-value">{loading ? '…' : `${pa.ht} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Nb commandes</span>
+              <span className="finance-value finance-count">{loading ? '…' : pa.count}</span>
+            </div>
           </div>
-          <div className="stat-value">{loading ? '…' : stats.totalProducts}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.activeProducts} actifs`}</div>
         </div>
 
-        <div className="stat-card stat-green" onClick={() => navigate('/customers')} style={{ cursor: 'pointer' }}>
-          <div className="stat-card-top">
-            <span className="stat-label">Clients</span>
-            <div className="stat-icon"><i className="ti ti-users"></i></div>
+        {/* Colonne 2 — Dans le panier */}
+        <div className="finance-col finance-col-amber">
+          <p className="finance-col-title">
+            <i className="ti ti-shopping-cart"></i>
+            Paniers en cours
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Total TTC</span>
+              <span className="finance-value">{loading ? '…' : `${panier.ttc} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Total HT</span>
+              <span className="finance-value">{loading ? '…' : `${panier.ht} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Nb paniers</span>
+              <span className="finance-value finance-count">{loading ? '…' : panier.count}</span>
+            </div>
           </div>
-          <div className="stat-value">{loading ? '…' : stats.totalCustomers}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.activeCustomers} actifs`}</div>
         </div>
 
-        <div className="stat-card stat-amber" onClick={() => navigate('/orders')} style={{ cursor: 'pointer' }}>
-          <div className="stat-card-top">
-            <span className="stat-label">Commandes</span>
-            <div className="stat-icon"><i className="ti ti-clipboard-list"></i></div>
+        {/* Colonne 3 — Total général */}
+        <div className="finance-col finance-col-blue">
+          <p className="finance-col-title">
+            <i className="ti ti-chart-bar"></i>
+            Total général
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Total TTC</span>
+              <span className="finance-value">{loading ? '…' : `${total.ttc} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Total HT</span>
+              <span className="finance-value">{loading ? '…' : `${total.ht} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Nb total</span>
+              <span className="finance-value finance-count">{loading ? '…' : total.count}</span>
+            </div>
           </div>
-          <div className="stat-value">{loading ? '…' : stats.totalOrders}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.totalRevenue} Ar`}</div>
         </div>
 
-        <div className="stat-card stat-red" onClick={() => navigate('/stock')} style={{ cursor: 'pointer' }}>
-          <div className="stat-card-top">
-            <span className="stat-label">Ruptures</span>
-            <div className="stat-icon"><i className="ti ti-package"></i></div>
-          </div>
-          <div className="stat-value">{loading ? '…' : stats.outOfStock}</div>
-          <div className="stat-sub">{loading ? '' : `${stats.lowStock} stock faible`}</div>
-        </div>
       </div>
 
       {/* Row principale : aujourd'hui + total par jour */}
