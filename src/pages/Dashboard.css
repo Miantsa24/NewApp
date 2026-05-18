@@ -13,7 +13,69 @@
   text-align: center;
 }
 
-/* ── Stats grid ── */
+/* ── Finance grid (3 colonnes) ── */
+.finance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.finance-col {
+  background: #ffffff;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.finance-col-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finance-col-green  { border-top: 3px solid #22c55e; }
+.finance-col-amber  { border-top: 3px solid #f59e0b; }
+.finance-col-blue   { border-top: 3px solid #3b82f6; }
+.finance-col-green .finance-col-title { color: #166534; }
+.finance-col-amber .finance-col-title { color: #92400e; }
+.finance-col-blue  .finance-col-title { color: #1e40af; }
+
+.finance-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finance-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.finance-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.finance-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.finance-count {
+  font-size: 20px;
+}
+
+/* ── Stats grid (conservé pour compatibilité) ── */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
