@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useEnrichedStock from '../hooks/useEnrichedStock'
 import useEnrichedProducts from '../hooks/useEnrichedProducts'
-import { addStock } from '../api/services/stockService'
+import { addStock } from '../api/services/stockMovementService'
 import './StockEntryPage.css'
 
 const StockEntryPage = () => {
@@ -16,17 +16,36 @@ const StockEntryPage = () => {
   const [quantity, setQuantity] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState(null)
-  const [refreshTick, setRefreshTick] = useState(0)
 
   const loading = loadingS || loadingP
 
   const productImageMap = useMemo(() => {
     const map = {}
-    products.forEach(p => {
-      map[String(p.id)] = p.imageUrl
-    })
+    products.forEach(p => { map[String(p.id)] = p.imageUrl })
     return map
   }, [products])
+
+  // Map productId → categoryDefault depuis useEnrichedProducts
+  const productCatMap = useMemo(() => {
+    const map = {}
+    products.forEach(p => { map[String(p.id)] = p.categoryDefault || '—' })
+    return map
+  }, [products])
+
+  // Tableau par catégorie : somme physique / réservé / disponible
+  const categoryStockSummary = useMemo(() => {
+    const catMap = {}
+    stock.forEach(s => {
+      const cat = productCatMap[s.productId] || '—'
+      if (!catMap[cat]) catMap[cat] = { physicalQty: 0, reservedQty: 0, availableQty: 0 }
+      catMap[cat].physicalQty   += s.physicalQty
+      catMap[cat].reservedQty   += s.reservedQty
+      catMap[cat].availableQty  += s.quantity
+    })
+    return Object.entries(catMap)
+      .map(([name, vals]) => ({ name, ...vals }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [stock, productCatMap])
 
   const filteredStock = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -39,13 +58,12 @@ const StockEntryPage = () => {
         (s.combinationRef || '').toLowerCase().includes(q)
       )
     })
-  }, [stock, search, onlyOutOfStock, refreshTick])
+  }, [stock, search, onlyOutOfStock])
 
   const [overrides, setOverrides] = useState({})
 
-  const getDisplayedQty = (s) => {
-    return overrides[s.id] !== undefined ? overrides[s.id] : s.quantity
-  }
+  const getDisplayedQty = (s) =>
+    overrides[s.id] !== undefined ? overrides[s.id] : s.quantity
 
   const getStockClass = (qty) => {
     if (qty <= 0) return 'stock-out'
@@ -53,17 +71,8 @@ const StockEntryPage = () => {
     return 'stock-ok'
   }
 
-  const openModal = (line) => {
-    setModal(line)
-    setQuantity('')
-    setFeedback(null)
-  }
-
-  const closeModal = () => {
-    if (submitting) return
-    setModal(null)
-    setQuantity('')
-  }
+  const openModal  = (line) => { setModal(line); setQuantity(''); setFeedback(null) }
+  const closeModal = () => { if (submitting) return; setModal(null); setQuantity('') }
 
   const goToHistory = (line) => {
     const combId = line.combinationId || 0
@@ -76,51 +85,29 @@ const StockEntryPage = () => {
       setFeedback({ type: 'error', msg: 'Saisir une quantité valide (supérieure à 0).' })
       return
     }
-
     setSubmitting(true)
     setFeedback(null)
-
     try {
-      const result = await addStock(modal.id, qty)
+      const result = await addStock(modal.productId, modal.combinationId || 0, qty)
       setOverrides(prev => ({ ...prev, [modal.id]: result.newQuantity }))
       setFeedback({
         type: 'success',
         msg: `+${qty} ajouté · stock passé de ${result.previousQuantity} à ${result.newQuantity}`,
         line: modal.id,
       })
-      setTimeout(() => {
-        setModal(null)
-        setQuantity('')
-        setFeedback(null)
-      }, 1400)
+      setTimeout(() => { setModal(null); setQuantity(''); setFeedback(null) }, 1400)
     } catch (err) {
       setFeedback({
         type: 'error',
-        msg: err?.response?.data?.error
-          || err?.response?.data
-          || err.message
-          || 'Erreur inconnue.',
+        msg: err?.response?.data?.error || err?.response?.data || err.message || 'Erreur inconnue.',
       })
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="list-container">
-        <p className="loading">Chargement du stock…</p>
-      </div>
-    )
-  }
-
-  if (errorS) {
-    return (
-      <div className="list-container">
-        <p className="error">Erreur : {errorS}</p>
-      </div>
-    )
-  }
+  if (loading) return <div className="list-container"><p className="loading">Chargement du stock…</p></div>
+  if (errorS)  return <div className="list-container"><p className="error">Erreur : {errorS}</p></div>
 
   return (
     <div className="list-container stock-entry-page">
@@ -145,7 +132,6 @@ const StockEntryPage = () => {
             </button>
           )}
         </div>
-
         <label className="stock-toggle">
           <input
             type="checkbox"
@@ -156,6 +142,7 @@ const StockEntryPage = () => {
         </label>
       </div>
 
+      {/* Tableau principal — inchangé */}
       {filteredStock.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-package-off"></i>
@@ -189,38 +176,23 @@ const StockEntryPage = () => {
                       </div>
                     )}
                   </td>
-                  <td>
-                    <span className="name-cell">{s.productName}</span>
-                  </td>
+                  <td><span className="name-cell">{s.productName}</span></td>
                   <td className="muted">{s.productReference}</td>
                   <td>
-                    {s.combinationRef ? (
-                      <span className="attribute-badge">{s.combinationRef}</span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
+                    {s.combinationRef
+                      ? <span className="attribute-badge">{s.combinationRef}</span>
+                      : <span className="muted">—</span>}
                   </td>
                   <td>
-                    <span className={`stock-qty ${getStockClass(qty)}`}>
-                      {qty}
-                    </span>
+                    <span className={`stock-qty ${getStockClass(qty)}`}>{qty}</span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <div className="stock-actions">
-                      <button
-                        className="btn-history"
-                        onClick={() => goToHistory(s)}
-                        title="Voir l'historique des mouvements"
-                      >
-                        <i className="ti ti-history"></i>
-                        Historique
+                      <button className="btn-history" onClick={() => goToHistory(s)} title="Voir l'historique">
+                        <i className="ti ti-history"></i>Historique
                       </button>
-                      <button
-                        className="btn-add-stock"
-                        onClick={() => openModal(s)}
-                      >
-                        <i className="ti ti-plus"></i>
-                        Ajouter
+                      <button className="btn-add-stock" onClick={() => openModal(s)}>
+                        <i className="ti ti-plus"></i>Ajouter
                       </button>
                     </div>
                   </td>
@@ -231,20 +203,68 @@ const StockEntryPage = () => {
         </table>
       )}
 
+      {/* ── Tableau par catégorie ── */}
+      <div className="stock-category-section">
+        <div className="stock-category-header">
+          <i className="ti ti-category"></i>
+          <span>Vue par catégorie</span>
+        </div>
+        <table className="list-table stock-category-table">
+          <thead>
+            <tr>
+              <th>Catégorie</th>
+              <th style={{ textAlign: 'right' }}>Qté physique</th>
+              <th style={{ textAlign: 'right' }}>Qté réservée</th>
+              <th style={{ textAlign: 'right' }}>Qté disponible</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categoryStockSummary.map(cat => (
+              <tr key={cat.name}>
+                <td><strong>{cat.name}</strong></td>
+                <td style={{ textAlign: 'right' }}>
+                  <span className="stock-qty stock-ok">{cat.physicalQty}</span>
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  {cat.reservedQty > 0
+                    ? <span className="stock-qty stock-low">{cat.reservedQty}</span>
+                    : <span className="muted">—</span>}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <span className={`stock-qty ${cat.availableQty <= 0 ? 'stock-out' : cat.availableQty <= 5 ? 'stock-low' : 'stock-ok'}`}>
+                    {cat.availableQty}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="stock-category-total">
+              <td><strong>Total</strong></td>
+              <td style={{ textAlign: 'right' }}>
+                <strong>{categoryStockSummary.reduce((s, c) => s + c.physicalQty, 0)}</strong>
+              </td>
+              <td style={{ textAlign: 'right' }}>
+                <strong>{categoryStockSummary.reduce((s, c) => s + c.reservedQty, 0)}</strong>
+              </td>
+              <td style={{ textAlign: 'right' }}>
+                <strong>{categoryStockSummary.reduce((s, c) => s + c.availableQty, 0)}</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Modale — inchangée */}
       {modal && (
         <div className="stock-modal-overlay" onClick={closeModal}>
           <div className="stock-modal" onClick={e => e.stopPropagation()}>
             <div className="stock-modal-header">
               <h3>Ajouter au stock</h3>
-              <button
-                className="stock-modal-close"
-                onClick={closeModal}
-                disabled={submitting}
-              >
+              <button className="stock-modal-close" onClick={closeModal} disabled={submitting}>
                 <i className="ti ti-x"></i>
               </button>
             </div>
-
             <div className="stock-modal-body">
               <div className="stock-modal-product">
                 <p className="stock-modal-name">{modal.productName}</p>
@@ -253,14 +273,12 @@ const StockEntryPage = () => {
                   {modal.combinationRef && ` · ${modal.combinationRef}`}
                 </p>
               </div>
-
               <div className="stock-modal-current">
                 <span>Stock actuel</span>
                 <span className={`stock-qty ${getStockClass(getDisplayedQty(modal))}`}>
                   {getDisplayedQty(modal)}
                 </span>
               </div>
-
               <div className="stock-modal-field">
                 <label>Quantité à ajouter</label>
                 <input
@@ -273,14 +291,12 @@ const StockEntryPage = () => {
                   autoFocus
                 />
               </div>
-
               {quantity && parseInt(quantity) > 0 && (
                 <div className="stock-modal-preview">
                   <span>Nouveau stock</span>
                   <strong>{getDisplayedQty(modal) + parseInt(quantity)}</strong>
                 </div>
               )}
-
               {feedback && (
                 <div className={`stock-modal-feedback ${feedback.type}`}>
                   <i className={`ti ${feedback.type === 'success' ? 'ti-check' : 'ti-alert-circle'}`}></i>
@@ -288,31 +304,16 @@ const StockEntryPage = () => {
                 </div>
               )}
             </div>
-
             <div className="stock-modal-footer">
-              <button
-                className="btn-cancel"
-                onClick={closeModal}
-                disabled={submitting}
-              >
-                Annuler
-              </button>
+              <button className="btn-cancel" onClick={closeModal} disabled={submitting}>Annuler</button>
               <button
                 className="btn-confirm"
                 onClick={handleSubmit}
                 disabled={submitting || !quantity || parseInt(quantity) <= 0}
               >
-                {submitting ? (
-                  <>
-                    <i className="ti ti-loader spin"></i>
-                    Enregistrement…
-                  </>
-                ) : (
-                  <>
-                    <i className="ti ti-check"></i>
-                    Valider
-                  </>
-                )}
+                {submitting
+                  ? <><i className="ti ti-loader spin"></i>Enregistrement…</>
+                  : <><i className="ti ti-check"></i>Valider</>}
               </button>
             </div>
           </div>

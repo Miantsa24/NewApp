@@ -400,11 +400,13 @@ const importStockRows = async (rows, mapping, registry, onProgress) => {
         if (!stockId) throw new Error(`stock_available introuvable pour ${ref}|${karazany}`)
         const xml = buildStockUpdateXml(stockId, productEntry.id, stockQty, combEntry.id)
         await putXml('stock_availables', stockId, xml)
+        try { await postStockMovementRecord(stockId, parseInt(stockQty), 1) } catch (e) { console.warn('[Import] mvt entrée stock:', e.message) }
       } else {
         // Produit simple : utiliser le stockAvailableId stocké lors de la création produit
         if (!productEntry.stockAvailableId) throw new Error(`stockAvailableId manquant pour "${ref}"`)
         const xml = buildStockUpdateXml(productEntry.stockAvailableId, productEntry.id, stockQty, '0')
         await putXml('stock_availables', productEntry.stockAvailableId, xml)
+        try { await postStockMovementRecord(productEntry.stockAvailableId, parseInt(stockQty), 1) } catch (e) { console.warn('[Import] mvt entrée stock:', e.message) }
       }
       results.success++
     } catch (err) {
@@ -676,6 +678,50 @@ const buildImportOrderXml = (idCustomer, idAddress, cartId, carrierId, currencyI
     <shipping_number></shipping_number>
   </order>
 </prestashop>`
+
+// Crée un enregistrement dans ps_stock_mvt via POST /stock_movements.
+// N'affecte PAS stock_available (déjà géré séparément).
+const postStockMovementRecord = async (idStockAvailable, physicalQty, sign, dateAdd) => {
+  const now = dateAdd || new Date().toISOString().replace('T', ' ').substring(0, 19)
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_mvt>
+    <id_stock>${idStockAvailable}</id_stock>
+    <id_stock_mvt_reason>${sign > 0 ? 1 : 2}</id_stock_mvt_reason>
+    <id_employee>0</id_employee>
+    <physical_quantity>${Math.abs(physicalQty)}</physical_quantity>
+    <sign>${sign > 0 ? 1 : -1}</sign>
+    <price_te>0</price_te>
+    <date_add>${now}</date_add>
+  </stock_mvt>
+</prestashop>`
+  await axiosInstance.post('/stock_movements', xml, {
+    headers: { 'Content-Type': 'application/xml' },
+  })
+}
+
+// Pour les commandes livrées importées : enregistre la sortie dans stock_mvt.
+// PS a déjà décrémenté stock_available via validateOrder() → on crée juste la trace.
+const recordStockExitForItems = async (resolvedItems, dateAdd) => {
+  for (const item of resolvedItems) {
+    try {
+      const combId = (item.idCombination && item.idCombination !== '0') ? item.idCombination : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.idProduct}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const parsed = parseXML(resp.data)
+      const raw    = parsed?.prestashop?.stock_availables?.stock_available
+      const stock  = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) {
+        console.warn(`[Import] stock_available introuvable pour sortie P${item.idProduct}/${combId}`)
+        continue
+      }
+      await postStockMovementRecord(getVal(stock.id), item.quantity, -1, dateAdd)
+    } catch (err) {
+      console.warn(`[Import] Mouvement sortie stock P${item.idProduct}:`, err.message)
+    }
+  }
+}
 
 // Re-incrémente le stock après création d'un ordre via l'import.
 // PS décrémente automatiquement via validateOrder() à la création de TOUT ordre.
@@ -983,6 +1029,10 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
                              && stateId !== ORDER_STATES.CANCELLED
       if (shouldReIncrement) {
         await reIncrementStockForOrderItems(resolvedItems)
+      }
+      // Pour les livrés : PS a déjà décrémenté via validateOrder() → on trace la sortie dans stock_mvt
+      if (stateId === ORDER_STATES.DELIVERED) {
+        await recordStockExitForItems(resolvedItems, dateAdd)
       }
 
       results.success++

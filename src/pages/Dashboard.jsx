@@ -2,10 +2,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import useEnrichedStock from '../hooks/useEnrichedStock'
+import useEnrichedProducts from '../hooks/useEnrichedProducts'
+import useProfitStats from '../hooks/useProfitStats'
 import { ORDER_STATES } from '../api/services/ordersService'
 import './Dashboard.css'
 
 const today = new Date().toISOString().split('T')[0]
+
+const fmt = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -13,22 +17,24 @@ const Dashboard = () => {
 
   const { orders, loading: loadingO } = useEnrichedOrders()
   const { stock,  loading: loadingS } = useEnrichedStock()
+  const { products, loading: loadingP } = useEnrichedProducts()
 
-  const loading = loadingO || loadingS
+  const loading = loadingO || loadingS || loadingP
+
+  const profit = useProfitStats(orders, products, stock)
 
   const stats = {
     outOfStock: stock.filter(s => s.outOfStock).length,
     lowStock:   stock.filter(s => s.lowStock).length,
   }
 
-  // ── Filtres états ──────────────────────────────────────────────────────────
   const isPaiementAccepte = (o) => o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
   const isDansPanier      = (o) =>
     o.stateId === ORDER_STATES.IN_CART || o.type === 'cart' || (o.state || '').toLowerCase() === 'dans le panier'
   const isDelivered       = (o) => o.stateId === ORDER_STATES.DELIVERED
 
-  const paOrders       = orders.filter(isPaiementAccepte)
-  const panierOrders   = orders.filter(isDansPanier)
+  const paOrders        = orders.filter(isPaiementAccepte)
+  const panierOrders    = orders.filter(isDansPanier)
   const livraisonOrders = orders.filter(isDelivered)
 
   const sum = (arr, field) => arr.reduce((s, o) => s + parseFloat(o[field] || 0), 0)
@@ -54,17 +60,13 @@ const Dashboard = () => {
     count: pa.count + panier.count + livraison.count,
   }
 
-  // États pertinents pour "par jour" et recherche (inclut livré)
   const relevantOrders = orders.filter(o => isPaiementAccepte(o) || isDansPanier(o) || isDelivered(o))
 
-  // "Aujourd'hui" : uniquement les items avec date_add = aujourd'hui
-  // (dans le panier OU paiement accepté, mais seulement s'ils datent d'aujourd'hui)
   const todayOrders = relevantOrders.filter(o => o.dateAdd === today)
   const todayData = todayOrders.length > 0
     ? { count: todayOrders.length, total: todayOrders.reduce((s, o) => s + parseFloat(o.totalTTC || 0), 0), orders: todayOrders }
     : null
 
-  // Groupement "par jour" : tous les items pertinents groupés par leur date réelle
   const ordersByDay = {}
   relevantOrders.forEach((o) => {
     const day = o.dateAdd && o.dateAdd !== '—' ? o.dateAdd : null
@@ -77,17 +79,14 @@ const Dashboard = () => {
   })
 
   const days = Object.entries(ordersByDay).sort((a, b) => new Date(b[0]) - new Date(a[0]))
-
-  // Commandes de la date recherchée
   const searchData = searchDate ? ordersByDay[searchDate] : null
 
   return (
     <div className="dashboard">
 
-      {/* 4 colonnes financières */}
+      {/* 4 colonnes financières — inchangées */}
       <div className="finance-grid finance-grid-4">
 
-        {/* Colonne 1 — Paiement accepté */}
         <div className="finance-col finance-col-green">
           <p className="finance-col-title">
             <i className="ti ti-circle-check"></i>
@@ -109,7 +108,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Colonne 2 — Dans le panier */}
         <div className="finance-col finance-col-amber">
           <p className="finance-col-title">
             <i className="ti ti-shopping-cart"></i>
@@ -131,7 +129,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Colonne 3 — Livré */}
         <div className="finance-col finance-col-indigo">
           <p className="finance-col-title">
             <i className="ti ti-truck-delivery"></i>
@@ -153,7 +150,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Colonne 4 — Total général */}
         <div className="finance-col finance-col-blue">
           <p className="finance-col-title">
             <i className="ti ti-chart-bar"></i>
@@ -177,10 +173,71 @@ const Dashboard = () => {
 
       </div>
 
+      {/* ── 3 cards Profit ── */}
+      <div className="finance-grid finance-grid-3">
+
+        <div className="finance-col finance-col-teal">
+          <p className="finance-col-title">
+            <i className="ti ti-receipt"></i>
+            Ventes HT (livrées)
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Montant HT</span>
+              <span className="finance-value">{loading ? '…' : `${fmt(profit.ventesHT)} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Nb commandes</span>
+              <span className="finance-value finance-count">{loading ? '…' : livraisonOrders.length}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="finance-col finance-col-rose">
+          <p className="finance-col-title">
+            <i className="ti ti-shopping-bag"></i>
+            Achats HT (stock fournisseur)
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Coût total stock</span>
+              <span className="finance-value">{loading ? '…' : `${fmt(profit.achatsHT)} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Formule</span>
+              <span className="finance-label" style={{ fontStyle: 'italic' }}>Σ (qté stock × prix achat)</span>
+            </div>
+          </div>
+        </div>
+
+        <div className={`finance-col ${profit.benefice >= 0 ? 'finance-col-profit-pos' : 'finance-col-profit-neg'}`}>
+          <p className="finance-col-title">
+            <i className="ti ti-trending-up"></i>
+            Bénéfice
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Ventes − Achats</span>
+              <span className={`finance-value ${profit.benefice >= 0 ? 'profit-pos' : 'profit-neg'}`}>
+                {loading ? '…' : `${profit.benefice >= 0 ? '+' : ''}${fmt(profit.benefice)} €`}
+              </span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Marge</span>
+              <span className={`finance-value ${profit.benefice >= 0 ? 'profit-pos' : 'profit-neg'}`}>
+                {loading || profit.ventesHT === 0
+                  ? '—'
+                  : `${((profit.benefice / profit.ventesHT) * 100).toFixed(1)} %`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       {/* Row principale : aujourd'hui + total par jour */}
       <div className="dashboard-row">
 
-        {/* Card aujourd'hui */}
         <div className="dash-card today-card">
           <div className="today-header">
             <div>
@@ -209,7 +266,6 @@ const Dashboard = () => {
                   <span className="today-stat-lbl">€ TTC</span>
                 </div>
               </div>
-
               <table className="dash-mini-table" style={{ marginTop: 12 }}>
                 <thead>
                   <tr>
@@ -244,7 +300,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Card total général par jour */}
         <div className="dash-card">
           <div className="dash-card-header">
             <p className="dash-card-title">
@@ -278,7 +333,6 @@ const Dashboard = () => {
                     if (!stateCounts[key]) stateCounts[key] = { count: 0, color: o.stateColor }
                     stateCounts[key].count++
                   })
-                  // Date de modification la plus récente parmi les commandes du jour
                   const lastModif = data.orders
                     .map(o => o.dateUpd || '')
                     .filter(Boolean)
@@ -333,7 +387,70 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Card recherche par date */}
+      
+      {/* ── Tableau détail par catégorie ── */}
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <p className="dash-card-title">
+            <i className="ti ti-category"></i>
+            Bénéfice par catégorie
+          </p>
+        </div>
+
+        {loading ? (
+          <p className="dash-empty">Chargement...</p>
+        ) : profit.byCategory.length === 0 ? (
+          <p className="dash-empty">Aucune donnée disponible</p>
+        ) : (
+          <table className="dash-mini-table">
+            <thead>
+              <tr>
+                <th>Catégorie</th>
+                <th style={{ textAlign: 'right' }}>Ventes HT (livrées)</th>
+                <th style={{ textAlign: 'right' }}>Achats HT (stock)</th>
+                <th style={{ textAlign: 'right' }}>Bénéfice</th>
+                <th style={{ textAlign: 'right' }}>Marge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profit.byCategory.map(cat => (
+                <tr key={cat.name}>
+                  <td><strong>{cat.name}</strong></td>
+                  <td className="price" style={{ textAlign: 'right' }}>{fmt(cat.ventesHT)} €</td>
+                  <td style={{ textAlign: 'right', color: '#64748b' }}>{fmt(cat.achatsHT)} €</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span style={{ color: cat.benefice >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                      {cat.benefice >= 0 ? '+' : ''}{fmt(cat.benefice)} €
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right', color: '#64748b' }}>
+                    {cat.ventesHT === 0 ? '—' : `${((cat.benefice / cat.ventesHT) * 100).toFixed(1)} %`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="total-row">
+                <td><strong>Total</strong></td>
+                <td className="price" style={{ textAlign: 'right' }}><strong>{fmt(profit.ventesHT)} €</strong></td>
+                <td style={{ textAlign: 'right' }}><strong>{fmt(profit.achatsHT)} €</strong></td>
+                <td style={{ textAlign: 'right' }}>
+                  <strong style={{ color: profit.benefice >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {profit.benefice >= 0 ? '+' : ''}{fmt(profit.benefice)} €
+                  </strong>
+                </td>
+                <td style={{ textAlign: 'right', color: '#64748b' }}>
+                  <strong>
+                    {profit.ventesHT === 0 ? '—' : `${((profit.benefice / profit.ventesHT) * 100).toFixed(1)} %`}
+                  </strong>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {/* Card recherche par date — inchangée */}
       <div className="dash-card">
         <div className="dash-card-header">
           <p className="dash-card-title">

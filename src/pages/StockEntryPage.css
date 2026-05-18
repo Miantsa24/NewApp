@@ -386,3 +386,39 @@
   animation: spin 0.8s linear infinite;
   display: inline-block;
 }
+
+/* ── Vue par catégorie ── */
+.stock-category-section {
+  margin-top: 2rem;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stock-category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-bottom: 0.5px solid #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.stock-category-header i {
+  font-size: 15px;
+  color: #64748b;
+}
+
+.stock-category-table {
+  border-radius: 0;
+}
+
+.stock-category-total td {
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 10px 8px;
+  border-bottom: none !important;
+}

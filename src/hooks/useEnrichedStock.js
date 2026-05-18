@@ -22,13 +22,6 @@ const fetchAll = async (endpoint, language = 1) => {
   return parseXML(response.data)
 }
 
-/**
- * Hook qui récupère le stock enrichi avec :
- * - Nom du produit lié
- * - Référence du produit
- * - Nom de la déclinaison si existe
- * - Statut rupture de stock
- */
 const useEnrichedStock = () => {
   const [stock, setStock] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,19 +33,19 @@ const useEnrichedStock = () => {
         setLoading(true)
         setError(null)
 
-        // Étape 1 : Requêtes en parallèle
-        const [stockData, productsData, combinationsData] = await Promise.all([
+        const [stockData, productsData, combinationsData, ordersData, orderDetailsData] = await Promise.all([
           fetchAll('stock_availables'),
           fetchAll('products'),
           fetchAll('combinations'),
+          fetchAll('orders'),
+          fetchAll('order_details'),
         ])
 
-        // Étape 2 : Normalisation
         const rawStock        = toArray(stockData?.prestashop?.stock_availables?.stock_available)
         const rawProducts     = toArray(productsData?.prestashop?.products?.product)
         const rawCombinations = toArray(combinationsData?.prestashop?.combinations?.combination)
-
-        // Étape 3 : Maps
+        const rawOrders       = toArray(ordersData?.prestashop?.orders?.order)
+        const rawOrderDetails = toArray(orderDetailsData?.prestashop?.order_details?.order_detail)
 
         // Map produit : id → { name, reference }
         const productMap = {}
@@ -71,9 +64,27 @@ const useEnrichedStock = () => {
           combinationMap[id] = getVal(c.reference) || null
         })
 
-        // Étape 4 : Filtrer les lignes produit-niveau redondantes
-        // Pour un produit avec déclinaisons, PS crée une entrée id_product_attribute=0 (somme)
-        // ET une entrée par déclinaison. On n'affiche que les déclinaisons.
+        // IDs des commandes avec état paiement accepté (stateId = '2')
+        const paidOrderIds = new Set(
+          rawOrders
+            .filter(o => String(getVal(o.current_state)) === '2')
+            .map(o => String(getVal(o.id)))
+        )
+
+        // Qté réservée par clé "productId_combinationId"
+        // order_details contient product_id et product_attribute_id
+        const reservedMap = {}
+        rawOrderDetails.forEach(d => {
+          const orderId = String(getVal(d.id_order))
+          if (!paidOrderIds.has(orderId)) return
+          const pid     = String(getVal(d.product_id))
+          const combId  = String(getVal(d.product_attribute_id) || '0')
+          const qty     = parseInt(getVal(d.product_quantity) || 0)
+          const key     = `${pid}_${combId}`
+          reservedMap[key] = (reservedMap[key] || 0) + qty
+        })
+
+        // Filtrer les lignes produit-niveau redondantes
         const productsWithCombinations = new Set(
           rawStock
             .filter(s => {
@@ -89,24 +100,26 @@ const useEnrichedStock = () => {
           return !(isProductLevel && productsWithCombinations.has(productId))
         })
 
-        // Étape 5 : Enrichissement
+        // Enrichissement
         const enriched = filteredStock.map((s) => {
           const productId     = String(getVal(s.id_product))
           const combinationId = String(getVal(s.id_product_attribute))
           const quantity      = parseInt(getVal(s.quantity) || 0)
 
-          // Nom et référence produit
           const product = productMap[productId] || { name: `Produit #${productId}`, reference: '—' }
 
-          // Déclinaison liée si existe (id 0 = pas de déclinaison)
           const hasCombination = combinationId && combinationId !== '0'
           const combinationRef = hasCombination
             ? combinationMap[combinationId] || `Déclinaison #${combinationId}`
             : null
 
-          // Statut stock
-          const outOfStock   = quantity <= 0
-          const lowStock     = quantity > 0 && quantity <= 5
+          // Qté réservée pour cette ligne précise
+          const key         = `${productId}_${hasCombination ? combinationId : '0'}`
+          const reservedQty = reservedMap[key] || 0
+          const physicalQty = quantity + reservedQty
+
+          const outOfStock = quantity <= 0
+          const lowStock   = quantity > 0 && quantity <= 5
 
           return {
             id: String(getVal(s.id)),
@@ -115,7 +128,9 @@ const useEnrichedStock = () => {
             productReference: product.reference,
             combinationId: hasCombination ? combinationId : null,
             combinationRef,
-            quantity,
+            quantity,       // dispo
+            reservedQty,    // réservé
+            physicalQty,    // physique = dispo + réservé
             outOfStock,
             lowStock,
             dependsOnStock: getVal(s.depends_on_stock),
@@ -124,7 +139,6 @@ const useEnrichedStock = () => {
           }
         })
 
-        // Trier : rupture en premier, puis stock faible, puis normal
         enriched.sort((a, b) => {
           if (a.outOfStock !== b.outOfStock) return a.outOfStock ? -1 : 1
           if (a.lowStock !== b.lowStock) return a.lowStock ? -1 : 1
