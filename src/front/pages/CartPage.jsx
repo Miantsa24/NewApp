@@ -13,6 +13,10 @@ import {
   createEmptyPsCart,
   syncPsCartRows,
   deletePsCart,
+  loadCartFromPs,
+  loadDansPanierOrderFromPs,
+  confirmDansPanierOrder,
+  decrementStockForItems,
 } from '../services/orderService'
 import './CartPage.css'
 
@@ -35,6 +39,66 @@ const CartPage = () => {
   const navigate = useNavigate()
   const user = frontGetCurrentUser()
 
+  // Si panier local vide : charger depuis PS (ex: panier créé via import CSV)
+  useEffect(() => {
+    if (psInitDone.current || !user?.id || cart.length > 0) return
+
+    psInitDone.current = true
+    const syncFromPs = async () => {
+      try {
+        // Essai 1 : panier PS actif (non converti en commande)
+        let result = await loadCartFromPs(user.id)
+        if (result && result.items.length > 0) {
+          const cartKey = getCartKey()
+          if (cartKey) {
+            localStorage.setItem(cartKey, JSON.stringify(result.items))
+            window.dispatchEvent(new Event('storage'))
+            setCart(result.items)
+          }
+          localStorage.setItem(`ps_cart_${user.id}`, JSON.stringify({
+            cartId: result.cartId,
+            cartSecureKey: result.cartSecureKey,
+          }))
+          setPsCartInfo({
+            type: 'cart',
+            cartId: result.cartId,
+            cartSecureKey: result.cartSecureKey,
+            carrierId: result.carrierId,
+            currencyId: result.currencyId,
+          })
+          return
+        }
+
+        // Essai 2 : commande importée en état "Dans le panier"
+        const orderResult = await loadDansPanierOrderFromPs(user.id)
+        if (!orderResult || orderResult.items.length === 0) {
+          psInitDone.current = false
+          return
+        }
+        // NE PAS stocker dans front_cart (localStorage) : évite que le second useEffect
+        // traite ces articles comme un panier FO normal et crée une nouvelle commande.
+        setCart(orderResult.items)
+        // Stocker un marqueur type:'order' pour que clearPsCart fonctionne et que le
+        // second useEffect (cart non vide) reconnaisse qu'il s'agit d'un ordre importé.
+        localStorage.setItem(`ps_cart_${user.id}`, JSON.stringify({
+          type: 'order',
+          orderId: orderResult.orderId,
+        }))
+        setPsCartInfo({
+          type: 'order',
+          orderId:    orderResult.orderId,
+          reference:  orderResult.reference,
+          carrierId:  orderResult.carrierId,
+          currencyId: orderResult.currencyId,
+        })
+      } catch (err) {
+        console.error('Erreur sync panier depuis PS:', err)
+        psInitDone.current = false
+      }
+    }
+    syncFromPs()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initialise le cart PS au montage si le panier est non-vide
   useEffect(() => {
     if (psInitDone.current || !user?.id || cart.length === 0) return
@@ -43,12 +107,22 @@ const CartPage = () => {
 
     const init = async () => {
       try {
+        // Si ps_cart stocke un ordre importé "Dans le panier", restaurer psCartInfo
+        // sans créer de nouveau panier PS (ce serait une nouvelle commande).
+        const stored = getStoredPsCart(user.id)
+        if (stored?.type === 'order') {
+          setPsCartInfo({
+            type: 'order',
+            orderId: stored.orderId,
+          })
+          return
+        }
+
         const [carrierId, currencyId] = await Promise.all([
           getClickAndCollectCarrier(),
           getDefaultCurrency(),
         ])
 
-        let stored = getStoredPsCart(user.id)
         let cartId, cartSecureKey
 
         if (!stored) {
@@ -79,7 +153,7 @@ const CartPage = () => {
   }
 
   const handlePsCartSync = (updatedItems) => {
-    if (!psCartInfo || !user?.id) return
+    if (!psCartInfo || !user?.id || psCartInfo.type === 'order') return
     if (updatedItems.length === 0) {
       deletePsCart(user.id, psCartInfo.cartId).catch(e => console.error('PS cart delete error:', e))
       setPsCartInfo(null)
@@ -113,6 +187,25 @@ const CartPage = () => {
   const totalTTC = total.toFixed(2)
 
   const handleOpenModal = async () => {
+    // Commande importée "Dans le panier" : confirmer directement sans modal (adresse déjà renseignée)
+    if (psCartInfo?.type === 'order') {
+      setSubmitting(true)
+      setSubmitError(null)
+      try {
+        const { orderId, reference } = await confirmDansPanierOrder(psCartInfo.orderId)
+        await decrementStockForItems(cart)
+        clearPsCart(user.id)
+        persist([])
+        setCart([])
+        navigate(`/shop/order-confirm/${orderId}`, { state: { reference, totalTTC } })
+      } catch (err) {
+        setSubmitError('Erreur lors de la confirmation : ' + err.message)
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
     setLoadingModal(true)
     setSubmitError(null)
     setShowAddressForm(false)
@@ -121,7 +214,7 @@ const CartPage = () => {
       setAddresses(addrs)
       setSelectedAddress(addrs.length > 0 ? addrs[0] : null)
       if (addrs.length === 0) setShowAddressForm(true)
-    } catch (e) {
+    } catch {
       setSubmitError('Impossible de charger les adresses')
     } finally {
       setLoadingModal(false)
@@ -193,6 +286,7 @@ const CartPage = () => {
         existingCartSecureKey:  psCartInfo?.cartSecureKey,
       })
 
+      // PS a déjà décrémenté le stock via validateOrder() lors de la création de la commande
       clearPsCart(user.id)
       persist([])
       setCart([])

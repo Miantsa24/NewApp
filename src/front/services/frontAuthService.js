@@ -95,6 +95,25 @@ export const frontLogin = async (email, password) => {
   return user
 }
 
+/**
+ * Connexion directe depuis la liste des comptes (FrontHomePage).
+ * Crée la session JWT sans vérification de mot de passe.
+ * Utilisé uniquement dans un contexte démo/backoffice où l'admin
+ * sélectionne un compte client sans avoir à saisir un mot de passe.
+ */
+export const frontLoginDirect = (customer) => {
+  const user = {
+    id:        String(customer.id),
+    email:     customer.email,
+    firstname: customer.firstname,
+    lastname:  customer.lastname,
+  }
+  const token = generateToken(user)
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  return user
+}
+
 export const frontLogout = () => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)

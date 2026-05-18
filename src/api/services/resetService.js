@@ -5,9 +5,25 @@ import { parseXML } from '../xmlParser'
 import { MODULES_CONFIG, getResetOrder } from '../utils/modulesConfig'
 
 /**
- * Service centralisé pour la réinitialisation des données PrestaShop
- * Gère le comptage et la suppression ordonnée avec sous-entités
+ * Cascade de dépendances pour la réinitialisation.
+ * Quand un module est sélectionné, tous les modules listés ici sont AUSSI forcés.
+ * Logique : si X référence Y en FK, supprimer Y nécessite supprimer X d'abord.
+ *
+ * Ex: "products" est sélectionné → "combinations" et "orders" sont forcés
+ *     car ils contiennent des références FK vers les produits.
  */
+export const RESET_CASCADE = {
+  taxes:         ['products'],
+  categories:    ['products'],
+  manufacturers: ['products'],
+  suppliers:     ['products'],
+  products:      ['combinations', 'orders'],
+  combinations:  ['orders'],
+  customers:     ['orders'],
+  orders:        [],
+  stock:         [],
+  warehouses:    [],
+}
 
 /**
  * Récupère le nombre d'éléments d'un endpoint
@@ -104,15 +120,20 @@ export const deleteModule = async (moduleKey, selectedSubEntities = {}) => {
   const moduleConfig = MODULES_CONFIG[moduleKey]
   if (!moduleConfig?.reset) throw new Error(`Module ${moduleKey} non configurable pour reset`)
 
-  const { mainEndpoint, subEntities, protectedIds } = moduleConfig.reset
+  // protectedIds peut être absent de la config → défaut []
+  const { mainEndpoint, subEntities, protectedIds = [] } = moduleConfig.reset
 
-  // 1. Suppression des sous-entités demandées (dans un ordre logique)
+  // 1. Suppression des sous-entités demandées
   for (const sub of subEntities) {
-    if (sub.endpoint && selectedSubEntities[sub.key] !== false) {
-      console.log(`Suppression des ${sub.label}...`)
-      const ids = await getAllIds(sub.endpoint)
-      for (const id of ids) {
+    if (!sub.endpoint || selectedSubEntities[sub.key] === false) continue
+    console.log(`Suppression des ${sub.label}...`)
+    const ids = await getAllIds(sub.endpoint)
+    for (const id of ids) {
+      try {
         await deleteById(sub.endpoint, id)
+      } catch (err) {
+        // Certains endpoints PS refusent DELETE (ex: stock_availables = 405) → ignorer
+        console.warn(`Suppression ignorée ${sub.endpoint}/${id} [${err.response?.status || err.message}]`)
       }
     }
   }
@@ -122,12 +143,15 @@ export const deleteModule = async (moduleKey, selectedSubEntities = {}) => {
   const ids = await getAllIds(mainEndpoint)
 
   for (const id of ids) {
-    // Protection des IDs système
     if (protectedIds.includes(id) || protectedIds.includes(String(id))) {
       console.warn(`ID ${id} protégé, ignoré`)
       continue
     }
-    await deleteById(mainEndpoint, id)
+    try {
+      await deleteById(mainEndpoint, id)
+    } catch (err) {
+      console.warn(`Suppression ignorée ${mainEndpoint}/${id} [${err.response?.status || err.message}]`)
+    }
   }
 }
 

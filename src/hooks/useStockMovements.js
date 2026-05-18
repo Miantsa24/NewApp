@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axiosInstance from '../api/axiosInstance'
 import { parseXML } from '../api/xmlParser'
+import { getStockMovements } from '../api/services/stockService'
 
 export const getVal = (field) => {
   if (field === null || field === undefined) return null
@@ -41,14 +42,15 @@ const useStockMovements = (productId, combinationId = 0) => {
         setLoading(true)
         setError(null)
 
-        const [movementsData, productsData, reasonsData, combinationsData] = await Promise.all([
-          fetchAll('stock_movements'),
+        // Mouvements : endpoint custom (lit ps_stock_mvt, déjà filtré par produit/déclinaison)
+        // Enrichissements : WS PS pour noms produit, raisons, références déclinaisons
+        const [rawMovements, productsData, reasonsData, combinationsData] = await Promise.all([
+          getStockMovements(productId, combinationId),
           fetchAll('products'),
           fetchAll('stock_movement_reasons'),
           fetchAll('combinations'),
         ])
 
-        const rawMovements    = toArray(movementsData?.prestashop?.stock_movements?.stock_movement)
         const rawProducts     = toArray(productsData?.prestashop?.products?.product)
         const rawReasons      = toArray(reasonsData?.prestashop?.stock_movement_reasons?.stock_movement_reason)
         const rawCombinations = toArray(combinationsData?.prestashop?.combinations?.combination)
@@ -110,7 +112,11 @@ const useStockMovements = (productId, combinationId = 0) => {
           const physicalQty  = parseInt(getVal(m.physical_quantity) || 0)
           const sign         = parseInt(getVal(m.sign) || reason.sign || 0)
           const dateAdd      = getVal(m.date_add) || ''
-          const employeeId   = getVal(m.id_employee) || null
+          // Nom employé depuis les champs retournés par le custom endpoint
+          const employeeName = [
+            m.employee_firstname || '',
+            m.employee_lastname  || '',
+          ].filter(Boolean).join(' ') || null
 
           // delta signé : entrée positive, sortie négative
           const delta = sign >= 0 ? physicalQty : -physicalQty
@@ -125,7 +131,7 @@ const useStockMovements = (productId, combinationId = 0) => {
             delta,
             isEntry,
             reasonName:    reason.name,
-            employeeId,
+            employeeId:    employeeName,
             raw: m,
           }
         })

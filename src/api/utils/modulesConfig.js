@@ -81,7 +81,7 @@ export const MODULES_CONFIG = {
         { key: 'product_options',              label: 'Product Options',              endpoint: 'product_options' },
         { key: 'product_feature_values',       label: 'Product Feature Values',       endpoint: 'product_feature_values' },
         { key: 'product_suppliers',            label: 'Product Suppliers',            endpoint: 'product_suppliers' },
-        { key: 'products_features',            label: 'Products Features',            endpoint: 'products_features' },
+        { key: 'product_features',             label: 'Product Features',             endpoint: 'product_features' },
       ]
     }
   },
@@ -187,7 +187,7 @@ export const MODULES_CONFIG = {
         { key: 'order_invoices',      label: 'Order Invoices',        endpoint: 'order_invoices' },
         { key: 'order_payments',      label: 'Order Payments',        endpoint: 'order_payments' },
         { key: 'order_slip',          label: 'Order Slip',            endpoint: 'order_slip' },
-        { key: 'order_states',        label: 'Order States',          endpoint: 'order_states' },
+        // order_states = configuration système PS (PS_OS_WS_PAYMENT, etc.) — ne jamais supprimer
       ]
     }
   },
@@ -228,8 +228,8 @@ export const MODULES_CONFIG = {
       label: 'Catégories',
       countEndpoint: 'categories',
       subEntities: [
-        { key: 'tags',                        label: 'Tags',                        endpoint: 'tags' },
-        { key: 'content_management_system',   label: 'Content Management System',   endpoint: 'content_management_system' },
+        { key: 'tags', label: 'Tags', endpoint: 'tags' },
+        // content_management_system = pages CMS PS (CGV, mentions légales…) — configuration système, ne pas supprimer
       ],
       protectedIds: ['1', '2']
     }
@@ -323,10 +323,10 @@ export const MODULES_CONFIG = {
       label: 'Stock',
       countEndpoint: 'stock_availables',
       subEntities: [
-        { key: 'stock_movements',              label: 'Stock Movements',             endpoint: 'stock_movements' },
-        { key: 'stock_movement_reasons',       label: 'Stock Movement Reasons',       endpoint: 'stock_movement_reasons' },
-        { key: 'stocks',                       label: 'Stocks',                       endpoint: 'stocks' },
-        { key: 'warehouse_product_locations',  label: 'Warehouse Product Locations',  endpoint: 'warehouse_product_locations' },
+        { key: 'stock_movements',             label: 'Stock Movements',            endpoint: 'stock_movements' },
+        // stock_movement_reasons = raisons PS pré-installées (retour client, correction…) — configuration système, ne pas supprimer
+        { key: 'stocks',                      label: 'Stocks',                     endpoint: 'stocks' },
+        { key: 'warehouse_product_locations', label: 'Warehouse Product Locations', endpoint: 'warehouse_product_locations' },
       ]
     }
   },

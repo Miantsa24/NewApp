@@ -3,8 +3,11 @@ import { parseXML } from '../../api/xmlParser'
 
 const getVal = (field) => {
   if (field === null || field === undefined) return ''
-  if (typeof field === 'object' && field['#text'] !== undefined) return field['#text']
-  return field
+  if (typeof field === 'object') {
+    if (field['#text'] !== undefined) return String(field['#text'])
+    return ''
+  }
+  return String(field)
 }
 
 const toArray = (data) => {
@@ -183,6 +186,97 @@ export const deletePsCart = async (customerId, cartId) => {
 }
 
 /**
+ * Charge le panier PS actif d'un utilisateur dans le localStorage.
+ * Utilisé quand le panier local est vide mais qu'un cart existe en PS
+ * (ex: panier créé via import CSV ou autre canal externe).
+ *
+ * @returns {{ cartId, cartSecureKey, carrierId, currencyId, items }} | null
+ */
+export const loadCartFromPs = async (customerId) => {
+  const psUrl = import.meta.env.VITE_PRESTASHOP_URL
+
+  // 1. Carts du client + commandes pour filtrer les carts déjà convertis
+  const [cartsResp, ordersResp, productsResp, combsResp] = await Promise.all([
+    axiosInstance.get(`/carts?display=full&filter[id_customer]=[${customerId}]`),
+    axiosInstance.get(`/orders?display=full&filter[id_customer]=[${customerId}]`),
+    axiosInstance.get('/products?display=full'),
+    axiosInstance.get('/combinations?display=full'),
+  ])
+
+  const cartsData    = (await import('../../api/xmlParser')).parseXML(cartsResp.data)
+  const ordersData   = (await import('../../api/xmlParser')).parseXML(ordersResp.data)
+  const productsData = (await import('../../api/xmlParser')).parseXML(productsResp.data)
+  const combsData    = (await import('../../api/xmlParser')).parseXML(combsResp.data)
+
+  const rawCarts    = toArray(cartsData?.prestashop?.carts?.cart)
+  const rawOrders   = toArray(ordersData?.prestashop?.orders?.order)
+  const rawProducts = toArray(productsData?.prestashop?.products?.product)
+  const rawCombs    = toArray(combsData?.prestashop?.combinations?.combination)
+
+  // Carts déjà convertis en commande
+  const convertedIds = new Set(rawOrders.map(o => String(getVal(o.id_cart))))
+
+  // Trouver le cart actif (non converti, avec lignes)
+  const activeCart = rawCarts.find(cart => {
+    const id = String(getVal(cart.id))
+    if (convertedIds.has(id)) return false
+    return toArray(cart?.associations?.cart_rows?.cart_row).length > 0
+  })
+  if (!activeCart) return null
+
+  const cartId       = String(getVal(activeCart.id))
+  const cartSecureKey = String(getVal(activeCart.secure_key) || '')
+  const carrierId    = String(getVal(activeCart.id_carrier) || '1')
+  const currencyId   = String(getVal(activeCart.id_currency) || '1')
+  const rows         = toArray(activeCart?.associations?.cart_rows?.cart_row)
+
+  // Maps produits et combinaisons
+  const productMap = {}
+  rawProducts.forEach(p => {
+    const id = String(getVal(p.id))
+    const priceHT = parseFloat(getVal(p.price) || 0)
+    const taxRuleId = getVal(p.id_tax_rules_group)
+    const hasTax = taxRuleId && String(taxRuleId) !== '0'
+    const priceTTC = priceHT * (hasTax ? 1.20 : 1)
+    const imageId = getVal(p.id_default_image)
+    const name = p.name?.language?.['#text'] || p.name?.language
+    productMap[id] = {
+      name: typeof name === 'object' ? String(Object.values(name)[0] || '') : String(name || '—'),
+      price: priceTTC.toFixed(2),
+      imageUrl: imageId ? `${psUrl}/api/images/products/${id}/${imageId}` : null,
+    }
+  })
+
+  const combMap = {}
+  rawCombs.forEach(c => {
+    const id = String(getVal(c.id))
+    combMap[id] = getVal(c.reference) || `Décl.#${id}`
+  })
+
+  // Construire les items au format cart localStorage
+  const items = rows.map(row => {
+    const productId    = String(getVal(row.id_product))
+    const combinationId = String(getVal(row.id_product_attribute) || '0')
+    const qty          = parseInt(getVal(row.quantity) || 1)
+    const hasComb      = combinationId && combinationId !== '0'
+    const prod         = productMap[productId] || { name: `#${productId}`, price: '0.00', imageUrl: null }
+
+    return {
+      itemId:         hasComb ? `${productId}_${combinationId}` : productId,
+      productId,
+      combinationId:  hasComb ? combinationId : null,
+      name:           prod.name,
+      attributeLabel: hasComb ? (combMap[combinationId] || null) : null,
+      price:          prod.price,
+      imageUrl:       prod.imageUrl,
+      qty,
+    }
+  })
+
+  return { cartId, cartSecureKey, carrierId, currencyId, items }
+}
+
+/**
  * Crée une commande depuis le panier client.
  * Si existingCartId est fourni (cart PS déjà créé), l'étape 1 est sautée.
  * L'étape 2 (sync lignes + adresse) est toujours exécutée.
@@ -323,18 +417,30 @@ ${cartRowsXml}
   </order>
 </prestashop>`
 
-  let orderResponse
+  let orderId = ''
   try {
-    orderResponse = await axiosInstance.post('/orders', orderXml, {
+    const orderResponse = await axiosInstance.post('/orders', orderXml, {
       headers: { 'Content-Type': 'application/xml' },
     })
+    const orderResult = parseXML(orderResponse.data)
+    orderId = String(getVal(orderResult?.prestashop?.order?.id) || '')
   } catch (err) {
-    console.error('Order creation error:', err.response?.data)
-    throw err
+    // 500 = hook PS (gamification…) — la commande est committée, on la retrouve via id_cart
+    if (err.response?.status === 500) {
+      try {
+        const findResp = await axiosInstance.get(`/orders?display=full&filter[id_cart]=[${cartId}]`)
+        const findParsed = parseXML(findResp.data)
+        const raw = findParsed?.prestashop?.orders?.order
+        const found = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+        if (found) orderId = String(getVal(found.id) || '')
+      } catch { /* orderId reste vide → erreur ci-dessous */ }
+      if (!orderId) throw err
+    } else {
+      console.error('Order creation error:', err.response?.data)
+      throw err
+    }
   }
 
-  const orderResult = parseXML(orderResponse.data)
-  const orderId = String(getVal(orderResult?.prestashop?.order?.id))
   if (!orderId || orderId === 'undefined') throw new Error('Erreur création commande')
 
   // Étape 4 : passer l'état à 2 "Paiement accepté" via GET + PUT
@@ -350,6 +456,152 @@ ${cartRowsXml}
     headers: { 'Content-Type': 'application/xml' },
   })
 
+  return { orderId, reference }
+}
+
+/**
+ * Charge les articles d'une commande PS en état "Dans le panier" pour le client.
+ * Utilisé quand le cart PS a été converti en commande (import CSV) mais que la commande
+ * n'est pas encore confirmée (état "Dans le panier").
+ *
+ * @returns {{ orderId, reference, carrierId, currencyId, items }} | null
+ */
+export const loadDansPanierOrderFromPs = async (customerId) => {
+  const psUrl = import.meta.env.VITE_PRESTASHOP_URL
+
+  const [ordersResp, statesResp] = await Promise.all([
+    axiosInstance.get(`/orders?display=full&filter[id_customer]=[${customerId}]`),
+    axiosInstance.get('/order_states?display=full'),
+  ])
+
+  const rawOrders = toArray(parseXML(ordersResp.data)?.prestashop?.orders?.order)
+  const rawStates = toArray(parseXML(statesResp.data)?.prestashop?.order_states?.order_state)
+
+  const getStateName = (s) => {
+    const n = s.name
+    if (!n) return ''
+    if (typeof n === 'string') return n
+    const lang = n.language
+    if (!lang) return ''
+    const first = Array.isArray(lang) ? lang[0] : lang
+    return typeof first === 'object' ? String(first['#text'] || '') : String(first || '')
+  }
+
+  const dansPanierIds = new Set(
+    rawStates
+      .filter(s => getStateName(s).toLowerCase() === 'dans le panier')
+      .map(s => String(getVal(s.id)))
+  )
+
+  const pendingOrder = rawOrders.find(o => dansPanierIds.has(String(getVal(o.current_state))))
+  if (!pendingOrder) return null
+
+  const orderId    = String(getVal(pendingOrder.id))
+  const reference  = String(getVal(pendingOrder.reference) || '—')
+  const carrierId  = String(getVal(pendingOrder.id_carrier) || '1')
+  const currencyId = String(getVal(pendingOrder.id_currency) || '1')
+
+  const [detailsResp, productsResp] = await Promise.all([
+    axiosInstance.get(`/order_details?display=full&filter[id_order]=[${orderId}]`),
+    axiosInstance.get('/products?display=full'),
+  ])
+
+  const rawDetails  = toArray(parseXML(detailsResp.data)?.prestashop?.order_details?.order_detail)
+  const rawProducts = toArray(parseXML(productsResp.data)?.prestashop?.products?.product)
+
+  const productMap = {}
+  rawProducts.forEach(p => {
+    const id = String(getVal(p.id))
+    const priceHT = parseFloat(getVal(p.price) || 0)
+    const taxRuleId = getVal(p.id_tax_rules_group)
+    const hasTax = taxRuleId && String(taxRuleId) !== '0'
+    const imageId = getVal(p.id_default_image)
+    const nameRaw = p.name?.language?.['#text'] || p.name?.language
+    productMap[id] = {
+      name: typeof nameRaw === 'object' ? String(Object.values(nameRaw)[0] || '') : String(nameRaw || '—'),
+      price: (priceHT * (hasTax ? 1.20 : 1)).toFixed(2),
+      imageUrl: imageId ? `${psUrl}/api/images/products/${id}/${imageId}` : null,
+    }
+  })
+
+  const items = rawDetails.map(detail => {
+    const productId     = String(getVal(detail.product_id))
+    const combinationId = String(getVal(detail.product_attribute_id) || '0')
+    const qty           = parseInt(getVal(detail.product_quantity) || 1)
+    const hasComb       = combinationId && combinationId !== '0'
+    const prod          = productMap[productId] || { name: `#${productId}`, price: '0.00', imageUrl: null }
+    return {
+      itemId:         hasComb ? `${productId}_${combinationId}` : productId,
+      productId,
+      combinationId:  hasComb ? combinationId : null,
+      name:           prod.name,
+      attributeLabel: null,
+      price:          prod.price,
+      imageUrl:       prod.imageUrl,
+      qty,
+    }
+  })
+
+  if (items.length === 0) return null
+  return { orderId, reference, carrierId, currencyId, items }
+}
+
+const buildStockXml = (stockId, productId, quantity, combinationId) =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id>${stockId}</id>
+    <id_product>${productId}</id_product>
+    <id_product_attribute>${combinationId}</id_product_attribute>
+    <id_shop>1</id_shop>
+    <id_shop_group>0</id_shop_group>
+    <quantity>${quantity}</quantity>
+    <depends_on_stock>0</depends_on_stock>
+    <out_of_stock>1</out_of_stock>
+  </stock_available>
+</prestashop>`
+
+/**
+ * Décrémente le stock PS pour chaque article du panier.
+ * Appelé après validation d'une commande (état → Paiement accepté).
+ * Les commandes "Dans le panier" ne déclenchent PAS cette fonction.
+ */
+export const decrementStockForItems = async (items) => {
+  for (const item of items) {
+    try {
+      const combId = (item.combinationId && item.combinationId !== '0') ? item.combinationId : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.productId}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const data   = parseXML(resp.data)
+      const raw    = data?.prestashop?.stock_availables?.stock_available
+      const stock  = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) continue
+      const stockId    = String(getVal(stock.id))
+      const currentQty = parseInt(getVal(stock.quantity) || '0', 10)
+      const newQty     = Math.max(0, currentQty - item.qty)
+      await axiosInstance.put(`/stock_availables/${stockId}`, buildStockXml(stockId, item.productId, newQty, combId), {
+        headers: { 'Content-Type': 'application/xml' },
+      })
+    } catch (err) {
+      console.warn(`Stock decrement failed for product ${item.productId}:`, err.message)
+    }
+  }
+}
+
+/**
+ * Confirme une commande "Dans le panier" en passant son état à "Paiement accepté" (state 2).
+ * Utilisé quand le client finalise une commande importée depuis CartPage.
+ */
+export const confirmDansPanierOrder = async (orderId) => {
+  const getResp = await axiosInstance.get(`/orders/${orderId}?display=full`)
+  const order   = parseXML(getResp.data)?.prestashop?.order
+  if (!order) throw new Error('Commande introuvable')
+  const reference = String(getVal(order.reference))
+  const updateXml = buildOrderStateXml(order, '2')
+  await axiosInstance.put(`/orders/${orderId}`, updateXml, {
+    headers: { 'Content-Type': 'application/xml' },
+  })
   return { orderId, reference }
 }
 

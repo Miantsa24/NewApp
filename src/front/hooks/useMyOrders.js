@@ -49,8 +49,14 @@ const useMyOrders = (customerId) => {
         const stateMap = {}
         rawOrderStates.forEach((s) => {
           const id = String(getVal(s.id))
+          const lang = s.name?.language
+          const stateName = typeof lang === 'string'
+            ? lang
+            : (lang?.['#text'] != null ? String(lang['#text']) : null)
+              ?? (Array.isArray(lang) && lang[0]?.['#text'] != null ? String(lang[0]['#text']) : null)
+              ?? '—'
           stateMap[id] = {
-            name:  s.name?.language?.['#text'] || s.name?.language || '—',
+            name:  stateName || '—',
             color: getVal(s.color) || '#64748b',
           }
         })

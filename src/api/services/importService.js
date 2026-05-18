@@ -20,7 +20,7 @@ import {
   ImportRegistry,
 } from '../utils/detectModules'
 import { MODULES_CONFIG } from '../utils/modulesConfig'
-import { updateOrderState } from './ordersService'
+import { updateOrderState, updateOrderDateAdd } from './ordersService'
 
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 300
@@ -400,8 +400,10 @@ const importCustomerRows = async (rows, mapping, registry, onProgress) => {
     const email = MODULES_CONFIG.customers.registryKey(row)
     try {
       const rawPwd = row['pwd'] || row['password'] || row['passwd'] || ''
-      const hashedPwd = await md5(rawPwd)
-      const customerXml = buildCustomerXml(row, hashedPwd)
+      // PS re-hashe le mot de passe avec password_hash() côté PHP lors du Customer::add()
+      // → envoyer le mot de passe en clair, PS stockera $2y$... (bcrypt PHP)
+      // → le FO peut ensuite comparer avec bcrypt.compare après $2y$→$2b$ conversion
+      const customerXml = buildCustomerXml(row, rawPwd)
 
       let idCustomer = null
       try {
@@ -459,47 +461,6 @@ const importCustomerRows = async (rows, mapping, registry, onProgress) => {
   return results
 }
 
-// ─── MD5 ──────────────────────────────────────────────────────────────────────
-
-const md5 = async (str) => md5Pure(str)
-
-const md5Pure = (str) => {
-  const safe_add = (x, y) => { const lsw = (x & 0xFFFF) + (y & 0xFFFF); const msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF) }
-  const bit_rol = (num, cnt) => (num << cnt) | (num >>> (32 - cnt))
-  const md5_cmn = (q, a, b, x, s, t) => safe_add(bit_rol(safe_add(safe_add(a, q), safe_add(x, t)), s), b)
-  const md5_ff = (a, b, c, d, x, s, t) => md5_cmn((b & c) | (~b & d), a, b, x, s, t)
-  const md5_gg = (a, b, c, d, x, s, t) => md5_cmn((b & d) | (c & ~d), a, b, x, s, t)
-  const md5_hh = (a, b, c, d, x, s, t) => md5_cmn(b ^ c ^ d, a, b, x, s, t)
-  const md5_ii = (a, b, c, d, x, s, t) => md5_cmn(c ^ (b | ~d), a, b, x, s, t)
-  const binl_md5 = (x, len) => {
-    x[len >> 5] |= 0x80 << (len % 32); x[(((len + 64) >>> 9) << 4) + 14] = len
-    let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878
-    for (let i = 0; i < x.length; i += 16) {
-      const olda = a, oldb = b, oldc = c, oldd = d
-      a = md5_ff(a,b,c,d,x[i],7,-680876936);d=md5_ff(d,a,b,c,x[i+1],12,-389564586);c=md5_ff(c,d,a,b,x[i+2],17,606105819);b=md5_ff(b,c,d,a,x[i+3],22,-1044525330)
-      a=md5_ff(a,b,c,d,x[i+4],7,-176418897);d=md5_ff(d,a,b,c,x[i+5],12,1200080426);c=md5_ff(c,d,a,b,x[i+6],17,-1473231341);b=md5_ff(b,c,d,a,x[i+7],22,-45705983)
-      a=md5_ff(a,b,c,d,x[i+8],7,1770035416);d=md5_ff(d,a,b,c,x[i+9],12,-1958414417);c=md5_ff(c,d,a,b,x[i+10],17,-42063);b=md5_ff(b,c,d,a,x[i+11],22,-1990404162)
-      a=md5_ff(a,b,c,d,x[i+12],7,1804603682);d=md5_ff(d,a,b,c,x[i+13],12,-40341101);c=md5_ff(c,d,a,b,x[i+14],17,-1502002290);b=md5_ff(b,c,d,a,x[i+15],22,1236535329)
-      a=md5_gg(a,b,c,d,x[i+1],5,-165796510);d=md5_gg(d,a,b,c,x[i+6],9,-1069501632);c=md5_gg(c,d,a,b,x[i+11],14,643717713);b=md5_gg(b,c,d,a,x[i],20,-373897302)
-      a=md5_gg(a,b,c,d,x[i+5],5,-701558691);d=md5_gg(d,a,b,c,x[i+10],9,38016083);c=md5_gg(c,d,a,b,x[i+15],14,-660478335);b=md5_gg(b,c,d,a,x[i+4],20,-405537848)
-      a=md5_gg(a,b,c,d,x[i+9],5,568446438);d=md5_gg(d,a,b,c,x[i+14],9,-1019803690);c=md5_gg(c,d,a,b,x[i+3],14,-187363961);b=md5_gg(b,c,d,a,x[i+8],20,1163531501)
-      a=md5_gg(a,b,c,d,x[i+13],5,-1444681467);d=md5_gg(d,a,b,c,x[i+2],9,-51403784);c=md5_gg(c,d,a,b,x[i+7],14,1735328473);b=md5_gg(b,c,d,a,x[i+12],20,-1926607734)
-      a=md5_hh(a,b,c,d,x[i+5],4,-378558);d=md5_hh(d,a,b,c,x[i+8],11,-2022574463);c=md5_hh(c,d,a,b,x[i+11],16,1839030562);b=md5_hh(b,c,d,a,x[i+14],23,-35309556)
-      a=md5_hh(a,b,c,d,x[i+1],4,-1530992060);d=md5_hh(d,a,b,c,x[i+4],11,1272893353);c=md5_hh(c,d,a,b,x[i+7],16,-155497632);b=md5_hh(b,c,d,a,x[i+10],23,-1094730640)
-      a=md5_hh(a,b,c,d,x[i+13],4,681279174);d=md5_hh(d,a,b,c,x[i],11,-358537222);c=md5_hh(c,d,a,b,x[i+3],16,-722521979);b=md5_hh(b,c,d,a,x[i+6],23,76029189)
-      a=md5_hh(a,b,c,d,x[i+9],4,-640364487);d=md5_hh(d,a,b,c,x[i+12],11,-421815835);c=md5_hh(c,d,a,b,x[i+15],16,530742520);b=md5_hh(b,c,d,a,x[i+2],23,-995338651)
-      a=md5_ii(a,b,c,d,x[i],6,-198630844);d=md5_ii(d,a,b,c,x[i+7],10,1126891415);c=md5_ii(c,d,a,b,x[i+14],15,-1416354905);b=md5_ii(b,c,d,a,x[i+5],21,-57434055)
-      a=md5_ii(a,b,c,d,x[i+12],6,1700485571);d=md5_ii(d,a,b,c,x[i+3],10,-1894986606);c=md5_ii(c,d,a,b,x[i+10],15,-1051523);b=md5_ii(b,c,d,a,x[i+1],21,-2054922799)
-      a=md5_ii(a,b,c,d,x[i+8],6,1873313359);d=md5_ii(d,a,b,c,x[i+15],10,-30611744);c=md5_ii(c,d,a,b,x[i+6],15,-1560198380);b=md5_ii(b,c,d,a,x[i+13],21,1309151649)
-      a=md5_ii(a,b,c,d,x[i+4],6,-145523070);d=md5_ii(d,a,b,c,x[i+11],10,-1120210379);c=md5_ii(c,d,a,b,x[i+2],15,718787259);b=md5_ii(b,c,d,a,x[i+9],21,-343485551)
-      a=safe_add(a,olda);b=safe_add(b,oldb);c=safe_add(c,oldc);d=safe_add(d,oldd)
-    }
-    return [a,b,c,d]
-  }
-  const binl2hex = (ba) => { const h='0123456789abcdef'; let s=''; for(let i=0;i<ba.length*4;i++){s+=h.charAt((ba[Math.floor(i/4)]>>((i%4)*8+4))&0xF)+h.charAt((ba[Math.floor(i/4)]>>((i%4)*8))&0xF)} return s }
-  const str2binl = (str) => { const bin=[]; const mask=(1<<8)-1; for(let i=0;i<str.length*8;i+=8){bin[i>>5]|=(str.charCodeAt(i/8)&mask)<<(i%32)} return bin }
-  return binl2hex(binl_md5(str2binl(str), str.length * 8))
-}
 
 // ─── XML customers + addresses ────────────────────────────────────────────────
 
@@ -668,6 +629,36 @@ const buildImportOrderXml = (idCustomer, idAddress, cartId, carrierId, currencyI
   </order>
 </prestashop>`
 
+// Re-incrémente le stock pour les commandes "Dans le panier".
+// PS décrémente automatiquement le stock via validateOrder() à la création de TOUT ordre.
+// Pour "Dans le panier" ce décréement ne doit pas encore avoir lieu → on annule.
+// Pour "Paiement accepté" PS a déjà décrémenté correctement → on ne touche pas.
+const reIncrementStockForOrderItems = async (resolvedItems) => {
+  for (const item of resolvedItems) {
+    try {
+      const combId = (item.idCombination && item.idCombination !== '0') ? item.idCombination : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.idProduct}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const parsed  = parseXML(resp.data)
+      const raw     = parsed?.prestashop?.stock_availables?.stock_available
+      const stock   = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) {
+        console.warn(`[Import] Stock introuvable pour produit ${item.idProduct} / déclinaison ${combId}`)
+        continue
+      }
+      const stockId    = getVal(stock.id)
+      const currentQty = parseInt(getVal(stock.quantity) || '0', 10)
+      const newQty     = currentQty + item.quantity  // ré-incrément : annule le décréement PS
+      const xml        = buildStockUpdateXml(stockId, item.idProduct, String(newQty), combId)
+      await putXml('stock_availables', stockId, xml)
+      console.log(`[Import] Stock P${item.idProduct}/D${combId}: ${currentQty} → ${newQty} (ré-incrément panier)`)
+    } catch (err) {
+      console.warn(`[Import] Ré-incrément stock P${item.idProduct}:`, err.message)
+    }
+  }
+}
+
 const importOrderRows = async (rows, mapping, registry, onProgress) => {
   const total = rows.length
   const results = { success: 0, errors: [], skipped: 0 }
@@ -719,12 +710,68 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
     if (def) defaultCurrencyId = getVal(def.id) || '1'
   } catch { /* fallback '1' */ }
 
+  // Trouver ou créer l'état PS "Dans le panier" (pour les lignes etat vide)
+  // Cet état permet à la commande d'apparaître dans PS BO Commandes avec le bon libellé.
+  let dansPanierStateId = null
+  try {
+    const statesResp = await axiosInstance.get('/order_states?display=full')
+    const statesParsed = parseXML(statesResp.data)
+    const rawStates = toArr(statesParsed?.prestashop?.order_states?.order_state)
+    const getStateName = (s) => {
+      const n = s.name
+      if (!n) return ''
+      if (typeof n === 'string') return n
+      const lang = n.language
+      if (!lang) return ''
+      const first = Array.isArray(lang) ? lang[0] : lang
+      return typeof first === 'object' ? String(first['#text'] || '') : String(first || '')
+    }
+    const existing = rawStates.find(s => getStateName(s).toLowerCase() === 'dans le panier')
+    if (existing) {
+      dansPanierStateId = getVal(existing.id)
+    } else {
+      // Créer l'état "Dans le panier" dans PS
+      const stateXml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_state>
+    <name><language id="1"><![CDATA[Dans le panier]]></language></name>
+    <color>#d97706</color>
+    <logable>0</logable>
+    <invoice>0</invoice>
+    <send_email>0</send_email>
+    <delivery>0</delivery>
+    <hidden>0</hidden>
+    <shipped>0</shipped>
+    <paid>0</paid>
+    <pdf_delivery>0</pdf_delivery>
+    <pdf_invoice>0</pdf_invoice>
+    <deleted>0</deleted>
+  </order_state>
+</prestashop>`
+      const stateResp = await postXml('order_states', stateXml)
+      const stateId = extractIdFromResponse(stateResp)
+      if (stateId) {
+        dansPanierStateId = stateId
+        console.log('[Import] État "Dans le panier" créé dans PS avec ID:', dansPanierStateId)
+      }
+    }
+  } catch (stateErr) {
+    console.warn('[Import] État "Dans le panier" non créé:', stateErr.message)
+  }
+
   for (let i = 0; i < total; i++) {
     const row = rows[i]
-    const email    = row['email']  || row['Email']  || ''
-    const achatStr = row['achat']  || row['Achat']  || ''
-    const etat     = row['etat']   || row['Etat']   || ''
-    const dateStr  = row['date']   || ''
+    // Lecture insensible à la casse pour tous les champs commande
+    const getCsvField = (row, key) => {
+      const direct = row[key] || row[key[0].toUpperCase() + key.slice(1)] || row[key.toUpperCase()]
+      if (direct) return String(direct)
+      const entry = Object.entries(row).find(([k]) => k.toLowerCase() === key.toLowerCase())
+      return entry ? String(entry[1] || '') : ''
+    }
+    const email    = getCsvField(row, 'email')
+    const achatStr = getCsvField(row, 'achat')
+    const etat     = getCsvField(row, 'etat')
+    const dateStr  = getCsvField(row, 'date')
 
     try {
       // 1. Résoudre client
@@ -804,50 +851,89 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
       )
       await putXml('carts', cartId, cartUpdateXml)
 
-      // 8. Si etat non-vide : créer la commande puis changer l'état
+      // 8. Créer TOUJOURS la commande PS depuis le cart
+      // → etat vide : order créé, état laissé à l'état initial PS (visible dans PS BO Commandes)
+      // → etat non-vide : order créé + état changé (paiement accepté, annulé…)
       const stateId = mapEtatToStateId(etat)
-      if (stateId !== null) {
-        const orderXml = buildImportOrderXml(
-          idCustomer, idAddress, cartId, defaultCarrierId, defaultCurrencyId, cartSecureKey, dateAdd
-        )
-        let orderId = ''
-        try {
-          const orderRaw = await postXml('orders', orderXml)
-          const orderParsed = parseXML(orderRaw)
-          const raw = orderParsed?.prestashop?.order?.id
-          orderId = raw && typeof raw === 'object' ? String(raw['#text'] || '') : String(raw || '')
-        } catch (err) {
-          const errData = String(err.response?.data || '')
-          // Le module gamification utilise un hook déprécié ("newOrder") qui fait échouer
-          // la réponse WS MAIS la commande est déjà committée en DB avant les hooks.
-          // On la retrouve via son id_cart.
-          if (errData.includes('gamification') || errData.includes('deprecated') || errData.includes('code><![CDATA[15]]>')) {
-            console.warn('[Import] Erreur hook gamification (non-bloquante), recherche commande par cart', cartId)
-            try {
-              const findResp = await axiosInstance.get(`/orders?display=full&filter[id_cart]=[${cartId}]`)
-              const findParsed = parseXML(findResp.data)
-              const rawOrders = findParsed?.prestashop?.orders?.order
-              const found = rawOrders ? (Array.isArray(rawOrders) ? rawOrders[0] : rawOrders) : null
-              orderId = found ? getVal(found.id) : ''
-              if (orderId) console.log('[Import] Commande #' + orderId + ' récupérée malgré erreur gamification')
-            } catch { /* orderId reste vide → erreur en dessous */ }
-          } else {
-            console.error('Order creation error (import):', errData)
-            throw err
+
+      const orderXml = buildImportOrderXml(
+        idCustomer, idAddress, cartId, defaultCarrierId, defaultCurrencyId, cartSecureKey, dateAdd
+      )
+      let orderId = ''
+      try {
+        const orderRaw = await postXml('orders', orderXml)
+        const orderParsed = parseXML(orderRaw)
+        const raw = orderParsed?.prestashop?.order?.id
+        orderId = raw && typeof raw === 'object' ? String(raw['#text'] || '') : String(raw || '')
+      } catch (err) {
+        // Toute erreur 500 sur POST /orders peut masquer une commande déjà committée
+        // (module gamification, hooks tiers, body vide…). On tente la récupération via id_cart.
+        if (err.response?.status === 500) {
+          console.warn('[Import] Erreur 500 POST /orders (hook PS), récupération via cart', cartId)
+          try {
+            const findResp = await axiosInstance.get(`/orders?display=full&filter[id_cart]=[${cartId}]`)
+            const findParsed = parseXML(findResp.data)
+            const rawOrders = findParsed?.prestashop?.orders?.order
+            const found = rawOrders ? (Array.isArray(rawOrders) ? rawOrders[0] : rawOrders) : null
+            orderId = found ? getVal(found.id) : ''
+            if (orderId) console.log('[Import] Commande #' + orderId + ' récupérée malgré erreur 500')
+          } catch { /* orderId reste vide → erreur levée ci-dessous */ }
+        } else {
+          console.error('Order creation error (import):', String(err.response?.data || err.message))
+          throw err
+        }
+      }
+      if (!orderId || orderId === '0') {
+        throw new Error('ID commande non récupéré depuis PrestaShop')
+      }
+
+      await sleep(600)
+
+      // PS ne met à jour date_add via PUT que pour les états "payés" (logable=1 / paid=1, ex: état 2).
+      // Pour l'état "Dans le panier" (paid=0), PS ignore date_add dans le PUT → date reste NOW.
+      // Solution : passer d'abord par l'état 2 avec dateAdd (PS applique la date),
+      // puis basculer vers "Dans le panier" sans dateAdd (PS ne réécrit pas date_add déjà en base).
+      if (stateId === null && dansPanierStateId) {
+        // Étape A : état 2 + dateAdd → PS met à jour date_add pour les états payés
+        if (dateStr) {
+          try {
+            await updateOrderState(orderId, '2', { dateAdd })
+            await sleep(400)
+          } catch (e) {
+            console.warn(`Import: étape date via état 2 échouée pour #${orderId}:`, e.message)
           }
         }
-        if (!orderId || orderId === '0') {
-          throw new Error('ID commande non récupéré depuis PrestaShop')
-        }
-        // Petit délai pour que PS finisse le traitement avant le GET /orders/{id}
-        await sleep(600)
-        // Changer l'état — si le GET retourne du non-XML (PS encore en traitement),
-        // on log l'avertissement mais la commande est quand même comptée comme succès
+        // Étape B : état final "Dans le panier" sans dateAdd — PS ne réécrit pas date_add
         try {
-          await updateOrderState(orderId, stateId)
-        } catch (stateErr) {
-          console.warn(`Import: état ${stateId} non appliqué pour commande #${orderId}:`, stateErr.message)
+          await updateOrderState(orderId, dansPanierStateId)
+        } catch (e) {
+          console.warn(`Import: état "Dans le panier" non appliqué pour #${orderId}:`, e.message)
         }
+      } else {
+        // Paiement accepté, annulé… : transition directe avec dateAdd (PS l'applique pour ces états)
+        const targetStateId = stateId !== null ? stateId : dansPanierStateId
+        if (targetStateId) {
+          try {
+            await updateOrderState(orderId, targetStateId, { dateAdd })
+          } catch (stateErr) {
+            console.warn(`Import: état ${targetStateId} non appliqué pour commande #${orderId}:`, stateErr.message)
+          }
+        }
+        // Filet de sécurité sur la date pour paiement accepté / annulé
+        if (dateStr) {
+          try {
+            await updateOrderDateAdd(orderId, dateAdd)
+          } catch (dateErr) {
+            console.warn(`Import: date_add non corrigée pour commande #${orderId}:`, dateErr.message)
+          }
+        }
+      }
+
+      // PS décrémente le stock automatiquement à la création de tout ordre (validateOrder).
+      // Pour "Dans le panier" : annuler ce décréement PS (la commande n'est pas encore validée).
+      // Pour "Paiement accepté" : PS a déjà décrémenté correctement, on ne fait rien.
+      if (stateId === null && dansPanierStateId) {
+        await reIncrementStockForOrderItems(resolvedItems)
       }
 
       results.success++

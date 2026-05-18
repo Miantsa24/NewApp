@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import FrontLayout from '../FrontLayout'
 import axiosInstance from '../../api/axiosInstance'
 import { parseXML } from '../../api/xmlParser'
-import { frontIsAuthenticated, frontGetCurrentUser } from '../services/frontAuthService'
+import { frontIsAuthenticated, frontGetCurrentUser, frontLoginDirect } from '../services/frontAuthService'
 import './FrontHomePage.css'
 
 const toArray = (data) => {
@@ -53,12 +53,12 @@ const FrontHomePage = () => {
 
   const handleAccess = (customer) => {
     if (isLoggedIn && currentUser?.email === customer.email) {
-      // Déjà connecté avec ce compte → aller directement au shop
       navigate('/shop/products')
       return
     }
-    // Rediriger vers login avec email pré-rempli
-    navigate(`/shop/login?email=${encodeURIComponent(customer.email)}`)
+    // Connexion directe sans saisie de mot de passe (mode démo)
+    frontLoginDirect(customer)
+    navigate('/shop/products')
   }
 
   return (
