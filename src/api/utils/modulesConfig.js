@@ -28,12 +28,8 @@ export const MODULES_CONFIG = {
     detectionThreshold: 4,
     importOrder: 3,
 
-    // Clé du registre : la référence produit extraite de la réponse PrestaShop
     registryKey: (row) => row['reference'] || row['Reference'] || row['ref'] || '',
-    // Après POST produit : on stocke { reference → { id, stockAvailableId } }
-    // resolvers = comment injecter les IDs depuis le registre dans le XML
     resolvers: {
-      // injecté dans buildXmlFromMapping via le registre global
       id_tax_rules_group: { registryModule: 'taxes',      lookupField: 'Taxe' },
       id_category_default: { registryModule: 'categories', lookupField: 'categorie' },
     },
@@ -108,7 +104,6 @@ export const MODULES_CONFIG = {
     detectionThreshold: 4,
     importOrder: 6,
 
-    // Après POST customer : stocke { email → id_customer }
     registryKey: (row) => row['email'] || row['Email'] || '',
 
     requiredFields: [
@@ -131,6 +126,8 @@ export const MODULES_CONFIG = {
       mainEndpoint: 'customers',
       label: 'Clients',
       countEndpoint: 'customers',
+      // id=1 = compte anonyme PS — ne jamais supprimer
+      protectedIds: ['1'],
       subEntities: [
         { key: 'addresses',           label: 'Addresses',             endpoint: 'addresses' },
         { key: 'customer_threads',    label: 'Customer Threads',      endpoint: 'customer_threads' },
@@ -138,7 +135,9 @@ export const MODULES_CONFIG = {
         { key: 'carts',               label: 'Carts',                 endpoint: 'carts' },
         { key: 'cart_rules',          label: 'Cart Rules',            endpoint: 'cart_rules' },
         { key: 'guests',              label: 'Guests',                endpoint: 'guests' },
-      ]
+      ],
+      // Adresses protégées : id=1 = adresse du compte anonyme PS
+      protectedAddressIds: ['1'],
     }
   },
 
@@ -207,7 +206,6 @@ export const MODULES_CONFIG = {
     detectionThreshold: 2,
     importOrder: 2,
 
-    // Après POST catégorie : stocke { "Akanjo" → id_category }
     registryKey: (row) => row['categorie'] || row['category'] || row['cat'] || '',
 
     requiredFields: [
@@ -253,7 +251,6 @@ export const MODULES_CONFIG = {
     detectionThreshold: 3,
     importOrder: 4,
 
-    // Après POST combination : stocke { "T_01|ngoza" → id_combination }
     registryKey: (row) => {
       const ref = row['reference'] || row['Reference'] || ''
       const val = row['karazany'] || row['specificité'] || row['specificite'] || ''
@@ -347,8 +344,6 @@ export const MODULES_CONFIG = {
     detectionThreshold: 2,
     importOrder: 1,
 
-    // Après la chaîne tax→tax_rules_group→tax_rule :
-    // stocke { "11.65" → id_tax_rules_group }
     registryKey: (row) => {
       const raw = row['Taxe'] || row['taxe'] || row['tax'] || row['tva'] || row['taux'] || ''
       return String(raw).replace(',', '.').replace('%', '').trim()

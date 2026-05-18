@@ -40,7 +40,7 @@ const getCount = async (endpoint) => {
     
     if (!items) return 0
     if (Array.isArray(items)) return items.length
-    return 1 // un seul élément
+    return 1
   } catch (err) {
     console.warn(`Impossible de compter ${endpoint}`, err)
     return 0
@@ -92,13 +92,13 @@ export const getResetStats = async () => {
     const mainCount = await getCount(config.countEndpoint)
 
     const subStats = {}
-for (const sub of config.subEntities) {
-  if (sub.endpoint) {
-    subStats[sub.key] = await getCount(sub.endpoint)
-  } else {
-    subStats[sub.key] = 0; // ou tu peux mettre "-" si tu veux
-  }
-}
+    for (const sub of config.subEntities) {
+      if (sub.endpoint) {
+        subStats[sub.key] = await getCount(sub.endpoint)
+      } else {
+        subStats[sub.key] = 0
+      }
+    }
 
     stats[key] = {
       label: config.label,
@@ -120,8 +120,7 @@ export const deleteModule = async (moduleKey, selectedSubEntities = {}) => {
   const moduleConfig = MODULES_CONFIG[moduleKey]
   if (!moduleConfig?.reset) throw new Error(`Module ${moduleKey} non configurable pour reset`)
 
-  // protectedIds peut être absent de la config → défaut []
-  const { mainEndpoint, subEntities, protectedIds = [] } = moduleConfig.reset
+  const { mainEndpoint, subEntities, protectedIds = [], protectedAddressIds = [] } = moduleConfig.reset
 
   // 1. Suppression des sous-entités demandées
   for (const sub of subEntities) {
@@ -129,10 +128,14 @@ export const deleteModule = async (moduleKey, selectedSubEntities = {}) => {
     console.log(`Suppression des ${sub.label}...`)
     const ids = await getAllIds(sub.endpoint)
     for (const id of ids) {
+      // Protection spécifique pour les adresses du compte anonyme
+      if (sub.endpoint === 'addresses' && protectedAddressIds.includes(String(id))) {
+        console.warn(`Adresse id=${id} protégée (compte anonyme), ignorée`)
+        continue
+      }
       try {
         await deleteById(sub.endpoint, id)
       } catch (err) {
-        // Certains endpoints PS refusent DELETE (ex: stock_availables = 405) → ignorer
         console.warn(`Suppression ignorée ${sub.endpoint}/${id} [${err.response?.status || err.message}]`)
       }
     }
@@ -170,7 +173,6 @@ export const deleteAllSelected = async (selectedModules, selectedSubEntities = {
   for (const module of orderedModules) {
     const moduleKey = module.key
 
-    // On saute les modules non sélectionnés
     if (selectedModules[moduleKey] === false) continue
 
     try {
@@ -198,7 +200,6 @@ export const deleteAllCustomers = () => deleteModule('customers')
 export const deleteAllOrders = () => deleteModule('orders')
 export const deleteAllCategories = () => deleteModule('categories')
 export const deleteAllCombinations = () => deleteModule('combinations')
-// deleteAllStock peut être ajouté si besoin
 
 export default {
   getResetStats,
