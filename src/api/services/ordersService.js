@@ -7,6 +7,7 @@ export const ORDER_STATES = {
   IN_CART:          'cart',  // État virtuel — panier, pas encore une commande PrestaShop
   PAYMENT_ACCEPTED: '2',     // Paiement effectué
   CANCELLED:        '6',     // Annulé
+  DELIVERED:        '5',     // Livré
 }
 
 export const getAllOrders = async () => {

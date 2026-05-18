@@ -20,7 +20,7 @@ import {
   ImportRegistry,
 } from '../utils/detectModules'
 import { MODULES_CONFIG } from '../utils/modulesConfig'
-import { updateOrderState, updateOrderDateAdd } from './ordersService'
+import { updateOrderState, updateOrderDateAdd, ORDER_STATES } from './ordersService'
 
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 300
@@ -569,10 +569,11 @@ const parseAchat = (achatStr) => {
 const mapEtatToStateId = (etat) => {
   if (!etat || etat.trim() === '') return null  // vide → Dans le panier
   const e = etat.toLowerCase().trim()
-  if (e.includes('panier') || e.includes('cart')) return null  // "dans le panier" → Dans le panier
-  if (e.includes('accept') || e.includes('effectu') || e.includes('pay')) return '2'
-  if (e.includes('annul') || e.includes('cancel')) return '6'
-  return '2'
+  if (e.includes('panier') || e.includes('cart'))               return null                         // Dans le panier
+  if (e.includes('livr')   || e.includes('deliver'))            return ORDER_STATES.DELIVERED        // Livré
+  if (e.includes('accept') || e.includes('effectu') || e.includes('pay')) return ORDER_STATES.PAYMENT_ACCEPTED  // Paiement accepté
+  if (e.includes('annul')  || e.includes('cancel'))             return ORDER_STATES.CANCELLED        // Annulé
+  return ORDER_STATES.PAYMENT_ACCEPTED
 }
 
 const buildImportCartXml = (idCustomer, idAddress, carrierId, currencyId, dateAdd) =>
@@ -676,10 +677,9 @@ const buildImportOrderXml = (idCustomer, idAddress, cartId, carrierId, currencyI
   </order>
 </prestashop>`
 
-// Re-incrémente le stock pour les commandes "Dans le panier".
-// PS décrémente automatiquement le stock via validateOrder() à la création de TOUT ordre.
-// Pour "Dans le panier" ce décréement ne doit pas encore avoir lieu → on annule.
-// Pour "Paiement accepté" PS a déjà décrémenté correctement → on ne touche pas.
+// Re-incrémente le stock après création d'un ordre via l'import.
+// PS décrémente automatiquement via validateOrder() à la création de TOUT ordre.
+// Le stock ne doit décroître qu'à la livraison (bouton "Livrer") → on annule systématiquement.
 const reIncrementStockForOrderItems = async (resolvedItems) => {
   for (const item of resolvedItems) {
     try {
@@ -699,7 +699,6 @@ const reIncrementStockForOrderItems = async (resolvedItems) => {
       const newQty     = currentQty + item.quantity  // ré-incrément : annule le décréement PS
       const xml        = buildStockUpdateXml(stockId, item.idProduct, String(newQty), combId)
       await putXml('stock_availables', stockId, xml)
-      console.log(`[Import] Stock P${item.idProduct}/D${combId}: ${currentQty} → ${newQty} (ré-incrément panier)`)
     } catch (err) {
       console.warn(`[Import] Ré-incrément stock P${item.idProduct}:`, err.message)
     }
@@ -976,10 +975,13 @@ const importOrderRows = async (rows, mapping, registry, onProgress) => {
         }
       }
 
-      // PS décrémente le stock automatiquement à la création de tout ordre (validateOrder).
-      // Pour "Dans le panier" : annuler ce décréement PS (la commande n'est pas encore validée).
-      // Pour "Paiement accepté" : PS a déjà décrémenté correctement, on ne fait rien.
-      if (stateId === null && dansPanierStateId) {
+      // PS validateOrder() décrémente le stock à la création de tout ordre.
+      // - Livré   : on conserve le décréement (livraison effective)
+      // - Annulé  : PS restaure automatiquement le stock lors du changement d'état → on ne touche pas
+      // - Autres  : on annule le décréement PS (stock ne baisse qu'à la livraison)
+      const shouldReIncrement = stateId !== ORDER_STATES.DELIVERED
+                             && stateId !== ORDER_STATES.CANCELLED
+      if (shouldReIncrement) {
         await reIncrementStockForOrderItems(resolvedItems)
       }
 

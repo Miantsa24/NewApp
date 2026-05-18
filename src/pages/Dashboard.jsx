@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useEnrichedOrders from '../hooks/useEnrichedOrders'
 import useEnrichedStock from '../hooks/useEnrichedStock'
+import { ORDER_STATES } from '../api/services/ordersService'
 import './Dashboard.css'
 
 const today = new Date().toISOString().split('T')[0]
@@ -21,12 +22,14 @@ const Dashboard = () => {
   }
 
   // ── Filtres états ──────────────────────────────────────────────────────────
-  const isPaiementAccepte = (o) => o.stateId === '2'
+  const isPaiementAccepte = (o) => o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
   const isDansPanier      = (o) =>
-    o.stateId === 'cart' || o.type === 'cart' || (o.state || '').toLowerCase() === 'dans le panier'
+    o.stateId === ORDER_STATES.IN_CART || o.type === 'cart' || (o.state || '').toLowerCase() === 'dans le panier'
+  const isDelivered       = (o) => o.stateId === ORDER_STATES.DELIVERED
 
-  const paOrders     = orders.filter(isPaiementAccepte)
-  const panierOrders = orders.filter(isDansPanier)
+  const paOrders       = orders.filter(isPaiementAccepte)
+  const panierOrders   = orders.filter(isDansPanier)
+  const livraisonOrders = orders.filter(isDelivered)
 
   const sum = (arr, field) => arr.reduce((s, o) => s + parseFloat(o[field] || 0), 0)
 
@@ -40,14 +43,19 @@ const Dashboard = () => {
     ht:    sum(panierOrders, 'totalHT').toFixed(2),
     count: panierOrders.length,
   }
+  const livraison = {
+    ttc:   sum(livraisonOrders, 'totalTTC').toFixed(2),
+    ht:    sum(livraisonOrders, 'totalHT').toFixed(2),
+    count: livraisonOrders.length,
+  }
   const total = {
-    ttc:   (parseFloat(pa.ttc) + parseFloat(panier.ttc)).toFixed(2),
-    ht:    (parseFloat(pa.ht)  + parseFloat(panier.ht)).toFixed(2),
-    count: pa.count + panier.count,
+    ttc:   (parseFloat(pa.ttc) + parseFloat(panier.ttc) + parseFloat(livraison.ttc)).toFixed(2),
+    ht:    (parseFloat(pa.ht)  + parseFloat(panier.ht)  + parseFloat(livraison.ht)).toFixed(2),
+    count: pa.count + panier.count + livraison.count,
   }
 
-  // États pertinents pour "par jour" et recherche
-  const relevantOrders = orders.filter(o => isPaiementAccepte(o) || isDansPanier(o))
+  // États pertinents pour "par jour" et recherche (inclut livré)
+  const relevantOrders = orders.filter(o => isPaiementAccepte(o) || isDansPanier(o) || isDelivered(o))
 
   // "Aujourd'hui" : uniquement les items avec date_add = aujourd'hui
   // (dans le panier OU paiement accepté, mais seulement s'ils datent d'aujourd'hui)
@@ -76,8 +84,8 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
 
-      {/* 3 colonnes financières */}
-      <div className="finance-grid">
+      {/* 4 colonnes financières */}
+      <div className="finance-grid finance-grid-4">
 
         {/* Colonne 1 — Paiement accepté */}
         <div className="finance-col finance-col-green">
@@ -123,7 +131,29 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Colonne 3 — Total général */}
+        {/* Colonne 3 — Livré */}
+        <div className="finance-col finance-col-indigo">
+          <p className="finance-col-title">
+            <i className="ti ti-truck-delivery"></i>
+            Livré
+          </p>
+          <div className="finance-cards">
+            <div className="finance-card">
+              <span className="finance-label">Total TTC</span>
+              <span className="finance-value">{loading ? '…' : `${livraison.ttc} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Total HT</span>
+              <span className="finance-value">{loading ? '…' : `${livraison.ht} €`}</span>
+            </div>
+            <div className="finance-card">
+              <span className="finance-label">Nb livré</span>
+              <span className="finance-value finance-count">{loading ? '…' : livraison.count}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Colonne 4 — Total général */}
         <div className="finance-col finance-col-blue">
           <p className="finance-col-title">
             <i className="ti ti-chart-bar"></i>

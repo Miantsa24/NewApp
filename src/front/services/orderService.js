@@ -42,11 +42,21 @@ export const getDefaultCurrency = async () => {
 }
 
 export const createAddress = async (customerId, addressData) => {
+  // Récupérer dynamiquement l'ID du pays France actif (évite le hardcode qui peut varier selon l'installation PS)
+  let countryId = '8'
+  try {
+    const ctryResp = await axiosInstance.get('/countries?display=full&filter[active]=[1]&filter[iso_code]=[FR]')
+    const ctryData = parseXML(ctryResp.data)
+    const raw = ctryData?.prestashop?.countries?.country
+    const france = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+    if (france) countryId = String(getVal(france.id)) || '8'
+  } catch { /* fallback 8 */ }
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <address>
     <id_customer>${customerId}</id_customer>
-    <id_country>72</id_country>
+    <id_country>${countryId}</id_country>
     <alias>${addressData.alias || 'Mon adresse'}</alias>
     <firstname>${addressData.firstname}</firstname>
     <lastname>${addressData.lastname}</lastname>
@@ -627,6 +637,34 @@ export const decrementStockForItems = async (items) => {
       })
     } catch (err) {
       console.warn(`Stock decrement failed for product ${item.productId}:`, err.message)
+    }
+  }
+}
+
+/**
+ * Re-incrémente le stock PS après validation d'une commande.
+ * PS décrémente automatiquement via validateOrder() — on annule ici.
+ * Le stock ne doit baisser qu'à la livraison (bouton "Livrer").
+ */
+export const reIncrementStockForItems = async (items) => {
+  for (const item of items) {
+    try {
+      const combId = (item.combinationId && item.combinationId !== '0') ? item.combinationId : '0'
+      const resp = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.productId}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const data   = parseXML(resp.data)
+      const raw    = data?.prestashop?.stock_availables?.stock_available
+      const stock  = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      if (!stock) continue
+      const stockId    = String(getVal(stock.id))
+      const currentQty = parseInt(getVal(stock.quantity) || '0', 10)
+      const newQty     = currentQty + item.qty
+      await axiosInstance.put(`/stock_availables/${stockId}`, buildStockXml(stockId, item.productId, newQty, combId), {
+        headers: { 'Content-Type': 'application/xml' },
+      })
+    } catch (err) {
+      console.warn(`Stock re-increment failed for product ${item.productId}:`, err.message)
     }
   }
 }
