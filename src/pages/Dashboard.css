@@ -37,12 +37,16 @@
   gap: 6px;
 }
 
+.finance-grid-4 { grid-template-columns: repeat(4, 1fr); }
+
 .finance-col-green  { border-top: 3px solid #22c55e; }
 .finance-col-amber  { border-top: 3px solid #f59e0b; }
+.finance-col-indigo { border-top: 3px solid #6366f1; }
 .finance-col-blue   { border-top: 3px solid #3b82f6; }
-.finance-col-green .finance-col-title { color: #166534; }
-.finance-col-amber .finance-col-title { color: #92400e; }
-.finance-col-blue  .finance-col-title { color: #1e40af; }
+.finance-col-green  .finance-col-title { color: #166534; }
+.finance-col-amber  .finance-col-title { color: #92400e; }
+.finance-col-indigo .finance-col-title { color: #4338ca; }
+.finance-col-blue   .finance-col-title { color: #1e40af; }
 
 .finance-cards {
   display: flex;
