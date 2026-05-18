@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { frontLogout, frontGetCurrentUser } from './services/frontAuthService'
+import { frontLogout, frontGetCurrentUser, frontLoginAsAnonymous, frontIsAnonymous } from './services/frontAuthService'
 import './FrontLayout.css'
 
 const FrontLayout = ({ children }) => {
@@ -32,7 +32,14 @@ const FrontLayout = ({ children }) => {
     navigate('/shop')
   }
 
+  const handleAnonymousLogin = () => {
+    const anonymousUser = frontLoginAsAnonymous()
+    setUser(anonymousUser)
+    navigate('/shop/products')
+  }
+
   const isActive = (path) => location.pathname === path
+  const isAnon   = frontIsAnonymous()
 
   return (
     <div className="front-layout">
@@ -47,7 +54,8 @@ const FrontLayout = ({ children }) => {
               <i className="ti ti-box"></i>
               Produits
             </Link>
-            {user && (
+            {/* Mes commandes masqué pour l'anonyme */}
+            {user && !isAnon && (
               <Link
                 to="/shop/my-orders"
                 className={`front-nav-link ${isActive('/shop/my-orders') ? 'active' : ''}`}
@@ -74,15 +82,23 @@ const FrontLayout = ({ children }) => {
           {user ? (
             <div className="front-nav-user">
               <div className="front-nav-avatar">
-                {user.firstname?.charAt(0).toUpperCase()}
+                {isAnon ? <i className="ti ti-user-question"></i> : user.firstname?.charAt(0).toUpperCase()}
               </div>
-              <span className="front-nav-username">{user.firstname}</span>
+              <span className="front-nav-username">
+                {isAnon ? 'Anonyme' : user.firstname}
+              </span>
               <button onClick={handleLogout} className="front-nav-logout">
                 <i className="ti ti-logout"></i>
               </button>
             </div>
           ) : (
-            <Link to="/shop/login" className="front-nav-login">Connexion</Link>
+            <div className="front-nav-auth-btns">
+              <Link to="/shop/login" className="front-nav-login">Connexion</Link>
+              <button className="front-nav-login" onClick={handleAnonymousLogin}>
+                <i className="ti ti-user-question"></i>
+                Connexion anonyme
+              </button>
+            </div>
           )}
         </div>
       </nav>

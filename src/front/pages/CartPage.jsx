@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FrontLayout from '../FrontLayout'
-import { frontIsAuthenticated, getCartKey, frontGetCurrentUser } from '../services/frontAuthService'
+import { frontIsAuthenticated, getCartKey, frontGetCurrentUser, frontIsAnonymous } from '../services/frontAuthService'
 import {
   getCustomerAddresses,
   getClickAndCollectCarrier,
@@ -38,10 +38,12 @@ const CartPage = () => {
   const psInitDone = useRef(false)
   const navigate = useNavigate()
   const user = frontGetCurrentUser()
+  const isAnon = frontIsAnonymous()
 
   // Si panier local vide : charger depuis PS (ex: panier créé via import CSV)
+  // Ne pas faire cette sync pour l'anonyme : son panier est purement localStorage
   useEffect(() => {
-    if (psInitDone.current || !user?.id || cart.length > 0) return
+    if (psInitDone.current || !user?.id || cart.length > 0 || isAnon) return
 
     psInitDone.current = true
     const syncFromPs = async () => {
@@ -75,11 +77,7 @@ const CartPage = () => {
           psInitDone.current = false
           return
         }
-        // NE PAS stocker dans front_cart (localStorage) : évite que le second useEffect
-        // traite ces articles comme un panier FO normal et crée une nouvelle commande.
         setCart(orderResult.items)
-        // Stocker un marqueur type:'order' pour que clearPsCart fonctionne et que le
-        // second useEffect (cart non vide) reconnaisse qu'il s'agit d'un ordre importé.
         localStorage.setItem(`ps_cart_${user.id}`, JSON.stringify({
           type: 'order',
           orderId: orderResult.orderId,
@@ -100,15 +98,14 @@ const CartPage = () => {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialise le cart PS au montage si le panier est non-vide
+  // Ne pas créer de cart PS pour l'anonyme
   useEffect(() => {
-    if (psInitDone.current || !user?.id || cart.length === 0) return
+    if (psInitDone.current || !user?.id || cart.length === 0 || isAnon) return
 
     psInitDone.current = true
 
     const init = async () => {
       try {
-        // Si ps_cart stocke un ordre importé "Dans le panier", restaurer psCartInfo
-        // sans créer de nouveau panier PS (ce serait une nouvelle commande).
         const stored = getStoredPsCart(user.id)
         if (stored?.type === 'order') {
           setPsCartInfo({
@@ -153,7 +150,7 @@ const CartPage = () => {
   }
 
   const handlePsCartSync = (updatedItems) => {
-    if (!psCartInfo || !user?.id || psCartInfo.type === 'order') return
+    if (!psCartInfo || !user?.id || psCartInfo.type === 'order' || isAnon) return
     if (updatedItems.length === 0) {
       deletePsCart(user.id, psCartInfo.cartId).catch(e => console.error('PS cart delete error:', e))
       setPsCartInfo(null)
@@ -186,8 +183,14 @@ const CartPage = () => {
   const totalHT  = (total / 1.20).toFixed(2)
   const totalTTC = total.toFixed(2)
 
+  // Anonyme clique Commander → redirect vers la liste des utilisateurs
   const handleOpenModal = async () => {
-    // Commande importée "Dans le panier" : confirmer directement sans modal (adresse déjà renseignée)
+    if (isAnon) {
+      navigate('/shop')
+      return
+    }
+
+    // Commande importée "Dans le panier" : confirmer directement sans modal
     if (psCartInfo?.type === 'order') {
       setSubmitting(true)
       setSubmitError(null)
@@ -286,7 +289,6 @@ const CartPage = () => {
         existingCartSecureKey:  psCartInfo?.cartSecureKey,
       })
 
-      // PS a déjà décrémenté le stock via validateOrder() lors de la création de la commande
       clearPsCart(user.id)
       persist([])
       setCart([])
@@ -351,9 +353,23 @@ const CartPage = () => {
 
           <div className="cart-summary">
             <p className="cart-total">Total : <span>{totalTTC} €</span></p>
-            <button className="cart-checkout-btn" onClick={handleOpenModal}>
-              Commander
-            </button>
+
+            {isAnon ? (
+              <div className="cart-anon-block">
+                <p className="cart-anon-msg">
+                  <i className="ti ti-info-circle"></i>
+                  Vous êtes connecté en mode anonyme. Choisissez un compte pour valider votre commande.
+                </p>
+                <button className="cart-checkout-btn" onClick={handleOpenModal}>
+                  Choisir un compte et commander
+                </button>
+              </div>
+            ) : (
+              <button className="cart-checkout-btn" onClick={handleOpenModal}>
+                Commander
+              </button>
+            )}
+
             <button className="cart-continue" onClick={() => navigate('/shop/products')}>
               Continuer mes achats
             </button>

@@ -6,6 +6,8 @@ const TOKEN_KEY = 'front_token'
 const USER_KEY  = 'front_user'
 const TOKEN_DURATION_MS = 8 * 60 * 60 * 1000
 
+const ANONYMOUS_ID = '1'
+
 const getVal = (field) => {
   if (field === null || field === undefined) return null
   if (typeof field === 'object') {
@@ -22,6 +24,7 @@ const generateToken = (user) => {
     email:     user.email,
     firstname: user.firstname,
     lastname:  user.lastname,
+    anonymous: user.anonymous || false,
     exp:       Date.now() + TOKEN_DURATION_MS,
   }))
   const signature = btoa(`${payload}.${import.meta.env.VITE_JWT_SECRET}`)
@@ -114,6 +117,24 @@ export const frontLoginDirect = (customer) => {
   return user
 }
 
+/**
+ * Connexion anonyme : utilise le customer PS id=1.
+ * Le flag anonymous=true est encodé dans le JWT et dans USER_KEY.
+ */
+export const frontLoginAsAnonymous = () => {
+  const user = {
+    id:        ANONYMOUS_ID,
+    email:     'anonymous@newapp.local',
+    firstname: 'Anonyme',
+    lastname:  '',
+    anonymous: true,
+  }
+  const token = generateToken(user)
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  return user
+}
+
 export const frontLogout = () => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
@@ -132,4 +153,12 @@ export const frontGetCurrentUser = () => {
   } catch {
     return null
   }
+}
+
+/**
+ * Retourne true si l'utilisateur connecté est le compte anonyme.
+ */
+export const frontIsAnonymous = () => {
+  const user = frontGetCurrentUser()
+  return user?.anonymous === true || String(user?.id) === ANONYMOUS_ID
 }
