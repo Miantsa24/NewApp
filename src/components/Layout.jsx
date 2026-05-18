@@ -7,7 +7,7 @@ const NAV_ITEMS = [
     section: 'Catalogue',
     items: [
       { to: '/',             label: 'Dashboard',    icon: 'ti-layout-dashboard', exact: true },
-      // { to: '/products',     label: 'Produits',     icon: 'ti-box' },
+       { to: '/products',     label: 'Produits',     icon: 'ti-box' },
       // { to: '/categories',   label: 'Catégories',   icon: 'ti-folder' },
       // { to: '/combinations', label: 'Déclinaisons', icon: 'ti-adjustments' },
       // { to: '/stock',        label: 'Stock',        icon: 'ti-package' },
@@ -38,7 +38,7 @@ const Layout = ({ children }) => {
   const getTitle = () => {
     const path = location.pathname
     if (path === '/')             return 'Dashboard'
-      // if (path === '/products')     return 'Produits'
+    if (path === '/products')     return 'Produits'
       // if (path === '/categories')   return 'Catégories'
       // if (path === '/combinations') return 'Déclinaisons'
       // if (path === '/stock')        return 'Stock'

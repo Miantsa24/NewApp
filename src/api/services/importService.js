@@ -567,8 +567,9 @@ const parseAchat = (achatStr) => {
 }
 
 const mapEtatToStateId = (etat) => {
-  if (!etat || etat.trim() === '') return null  // null = panier seulement
+  if (!etat || etat.trim() === '') return null  // vide → Dans le panier
   const e = etat.toLowerCase().trim()
+  if (e.includes('panier') || e.includes('cart')) return null  // "dans le panier" → Dans le panier
   if (e.includes('accept') || e.includes('effectu') || e.includes('pay')) return '2'
   if (e.includes('annul') || e.includes('cancel')) return '6'
   return '2'
