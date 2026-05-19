@@ -150,7 +150,7 @@
   white-space: nowrap;
 }
 
-/* Bouton action */
+/* Bouton action (Finaliser) */
 .my-orders-action-btn {
   display: inline-flex;
   align-items: center;
@@ -168,6 +168,90 @@
 
 .my-orders-action-btn:hover {
   background: #334155;
+}
+
+/* Bouton +commande */
+.my-orders-reorder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  background: #eff6ff;
+  color: #3b82f6;
+  border: 0.5px solid #bfdbfe;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.my-orders-reorder-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+/* Panel inline de duplication */
+.reorder-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.reorder-mult-input {
+  width: 58px;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  text-align: center;
+  color: #1e293b;
+}
+
+.reorder-mult-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px #bfdbfe44;
+}
+
+.reorder-add-btn {
+  padding: 0.38rem 0.8rem;
+  background: #1e293b;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.reorder-add-btn:hover {
+  background: #334155;
+}
+
+.reorder-cancel-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.reorder-cancel-btn:hover {
+  border-color: #fca5a5;
+  color: #ef4444;
+  background: #fef2f2;
 }
 
 /* Spinner */

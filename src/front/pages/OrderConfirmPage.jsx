@@ -3,12 +3,13 @@ import FrontLayout from '../FrontLayout'
 import './OrderConfirmPage.css'
 
 const OrderConfirmPage = () => {
-  const { id } = useParams()
+  const { id }    = useParams()
   const { state } = useLocation()
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
 
-  const reference = state?.reference || '—'
-  const totalTTC  = state?.totalTTC  || '—'
+  const reference  = state?.reference || '—'
+  const totalTTC   = state?.totalTTC  || '—'
+  const orderState = state?.state     || 'Paiement effectué'
 
   return (
     <FrontLayout>
@@ -39,7 +40,7 @@ const OrderConfirmPage = () => {
             </div>
             <div className="confirm-row">
               <span className="confirm-label">État</span>
-              <span className="confirm-badge">Paiement effectué</span>
+              <span className="confirm-badge">{orderState}</span>
             </div>
           </div>
 
@@ -47,8 +48,8 @@ const OrderConfirmPage = () => {
             <button className="confirm-btn-primary" onClick={() => navigate('/shop/products')}>
               Continuer mes achats
             </button>
-            <button className="confirm-btn-secondary" onClick={() => navigate('/shop')}>
-              Accueil
+            <button className="confirm-btn-secondary" onClick={() => navigate('/shop/my-orders')}>
+              Mes commandes
             </button>
           </div>
         </div>
