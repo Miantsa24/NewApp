@@ -32,18 +32,37 @@ const StockEntryPage = () => {
     return map
   }, [products])
 
-  // Tableau par catégorie : somme physique / réservé / disponible
+  // Tableau par catégorie
+  // - availableQty : on prend availableQty depuis la ligne attr=0 (dédupliqué par produit)
+  // - reservedQty  : somme de toutes les déclinaisons (déjà correct)
+  // - physicalQty  : availableQty + reservedQty
   const categoryStockSummary = useMemo(() => {
     const catMap = {}
+
+    // Étape 1 : réservé — somme toutes les lignes (déclinaisons ou produit simple)
     stock.forEach(s => {
       const cat = productCatMap[s.productId] || '—'
-      if (!catMap[cat]) catMap[cat] = { physicalQty: 0, reservedQty: 0, availableQty: 0 }
-      catMap[cat].physicalQty   += s.physicalQty
-      catMap[cat].reservedQty   += s.reservedQty
-      catMap[cat].availableQty  += s.quantity
+      if (!catMap[cat]) catMap[cat] = { reservedQty: 0, availableQty: 0, seenProducts: new Set() }
+      catMap[cat].reservedQty += s.reservedQty
     })
+
+    // Étape 2 : disponible — on ne compte qu'une fois par produit (via availableQty)
+    stock.forEach(s => {
+      const cat = productCatMap[s.productId] || '—'
+      if (!catMap[cat]) catMap[cat] = { reservedQty: 0, availableQty: 0, seenProducts: new Set() }
+      if (!catMap[cat].seenProducts.has(s.productId)) {
+        catMap[cat].availableQty += s.availableQty
+        catMap[cat].seenProducts.add(s.productId)
+      }
+    })
+
     return Object.entries(catMap)
-      .map(([name, vals]) => ({ name, ...vals }))
+      .map(([name, vals]) => ({
+        name,
+        availableQty: vals.availableQty,
+        reservedQty:  vals.reservedQty,
+        physicalQty:  vals.availableQty + vals.reservedQty,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [stock, productCatMap])
 
@@ -142,7 +161,6 @@ const StockEntryPage = () => {
         </label>
       </div>
 
-      {/* Tableau principal — inchangé */}
       {filteredStock.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-package-off"></i>
@@ -255,7 +273,7 @@ const StockEntryPage = () => {
         </table>
       </div>
 
-      {/* Modale — inchangée */}
+      {/* Modale */}
       {modal && (
         <div className="stock-modal-overlay" onClick={closeModal}>
           <div className="stock-modal" onClick={e => e.stopPropagation()}>

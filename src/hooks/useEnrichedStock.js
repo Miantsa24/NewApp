@@ -71,20 +71,39 @@ const useEnrichedStock = () => {
             .map(o => String(getVal(o.id)))
         )
 
-        // Qté réservée par clé "productId_combinationId"
-        // order_details contient product_id et product_attribute_id
+        // Réservé par clé "productId_combinationId" (pour tableau principal par déclinaison)
         const reservedMap = {}
         rawOrderDetails.forEach(d => {
           const orderId = String(getVal(d.id_order))
           if (!paidOrderIds.has(orderId)) return
-          const pid     = String(getVal(d.product_id))
-          const combId  = String(getVal(d.product_attribute_id) || '0')
-          const qty     = parseInt(getVal(d.product_quantity) || 0)
-          const key     = `${pid}_${combId}`
+          const pid    = String(getVal(d.product_id))
+          const combId = String(getVal(d.product_attribute_id) || '0')
+          const qty    = parseInt(getVal(d.product_quantity) || 0)
+          const key    = `${pid}_${combId}`
           reservedMap[key] = (reservedMap[key] || 0) + qty
         })
 
-        // Filtrer les lignes produit-niveau redondantes
+        // Réservé global par productId (toutes déclinaisons) pour physique/disponible catégorie
+        const reservedByProduct = {}
+        rawOrderDetails.forEach(d => {
+          const orderId = String(getVal(d.id_order))
+          if (!paidOrderIds.has(orderId)) return
+          const pid = String(getVal(d.product_id))
+          const qty = parseInt(getVal(d.product_quantity) || 0)
+          reservedByProduct[pid] = (reservedByProduct[pid] || 0) + qty
+        })
+
+        // Map productId → quantité ligne attr=0 = stock physique total (maintenu par PrestaShop)
+        const physicalByProduct = {}
+        rawStock.forEach(s => {
+          const combId = String(getVal(s.id_product_attribute) || '0')
+          if (combId === '0') {
+            const pid = String(getVal(s.id_product))
+            physicalByProduct[pid] = parseInt(getVal(s.quantity) || 0)
+          }
+        })
+
+        // Produits qui ont au moins une déclinaison
         const productsWithCombinations = new Set(
           rawStock
             .filter(s => {
@@ -93,6 +112,8 @@ const useEnrichedStock = () => {
             })
             .map(s => String(getVal(s.id_product)))
         )
+
+        // Filtrer les lignes attr=0 pour produits avec déclinaisons (redondantes pour le tableau principal)
         const filteredStock = rawStock.filter(s => {
           const productId = String(getVal(s.id_product))
           const combId    = String(getVal(s.id_product_attribute))
@@ -113,13 +134,19 @@ const useEnrichedStock = () => {
             ? combinationMap[combinationId] || `Déclinaison #${combinationId}`
             : null
 
-          // Qté réservée pour cette ligne précise
+          // Réservé pour cette déclinaison précise (tableau principal)
           const key         = `${productId}_${hasCombination ? combinationId : '0'}`
           const reservedQty = reservedMap[key] || 0
-          const physicalQty = quantity + reservedQty
 
-          const outOfStock = quantity <= 0
-          const lowStock   = quantity > 0 && quantity <= 5
+          // physique = ligne attr=0 = total brut du produit (PrestaShop le maintient automatiquement)
+          const physicalQty = physicalByProduct[productId] ?? quantity
+
+          // disponible = physique - réservé total du produit (toutes déclinaisons)
+          const totalReserved = reservedByProduct[productId] || 0
+          const availableQty  = physicalQty - totalReserved
+
+          const outOfStock = availableQty <= 0
+          const lowStock   = availableQty > 0 && availableQty <= 5
 
           return {
             id: String(getVal(s.id)),
@@ -128,9 +155,10 @@ const useEnrichedStock = () => {
             productReference: product.reference,
             combinationId: hasCombination ? combinationId : null,
             combinationRef,
-            quantity,       // dispo
-            reservedQty,    // réservé
-            physicalQty,    // physique = dispo + réservé
+            quantity,        // stock par déclinaison — tableau principal
+            availableQty,    // disponible = physique - réservé total — tableau catégorie
+            reservedQty,     // réservé par déclinaison — tableau principal
+            physicalQty,     // physique = ligne attr=0 — tableau catégorie
             outOfStock,
             lowStock,
             dependsOnStock: getVal(s.depends_on_stock),
