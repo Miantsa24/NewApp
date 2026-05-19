@@ -58,8 +58,8 @@ const ProductList = () => {
               <td className="date-cell">{product.categoryParent}</td>
               <td className="date-cell">{product.categoryDefault}</td>
               <td className="date-cell">{product.reference}</td>
-              <td className="price-cell">{product.priceHT} Ar</td>
-              <td className="price-cell">{product.priceTTC} Ar</td>
+              <td className="price-cell">{product.priceHT} €</td>
+              <td className="price-cell">{product.priceTTC} €</td>
               <td>
                 <span className={`status ${product.quantity > 0 ? 'status-active' : 'status-inactive'}`}>
                   {product.quantity}
