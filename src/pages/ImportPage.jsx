@@ -58,10 +58,20 @@ const MAX_FILE_SIZE_MB = 20
 
 // ─── Composant FileCard ───────────────────────────────────────────────────────
 
-const FileCard = ({ entry, onRemove, onDelimiterChange, disabled }) => {
+const FileCard = ({ entry, onRemove, onDelimiterChange, onToggle, unmetDeps = [], disabled }) => {
+  const isEnabled = entry.enabled !== false
+
   if (entry.type === 'zip') {
     return (
-      <div className="file-card">
+      <div className={`file-card${!isEnabled ? ' file-card--disabled' : ''}`}>
+        <label className="file-card-toggle">
+          <input
+            type="checkbox"
+            checked={isEnabled}
+            onChange={() => onToggle(entry.id)}
+            disabled={disabled}
+          />
+        </label>
         <div className="file-card-main">
           <div className="file-card-icon zip">
             <i className="ti ti-file-zip"></i>
@@ -73,6 +83,17 @@ const FileCard = ({ entry, onRemove, onDelimiterChange, disabled }) => {
                 <i className="ti ti-photo"></i> Images produits
               </span>
             </div>
+            {isEnabled && unmetDeps.length > 0 && (
+              <div className="file-validation">
+                {unmetDeps.map((ud, i) => (
+                  <span key={i} className="val-warning">
+                    <i className="ti ti-alert-triangle"></i>
+                    {MODULE_LABELS[ud.module]} dépend de <strong>{MODULE_LABELS[ud.dep]}</strong>
+                    {ud.providerName ? ` (${ud.providerName} non sélectionné)` : ' (non fourni dans ce session)'}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         {!disabled && (
@@ -85,7 +106,15 @@ const FileCard = ({ entry, onRemove, onDelimiterChange, disabled }) => {
   }
 
   return (
-    <div className="file-card">
+    <div className={`file-card${!isEnabled ? ' file-card--disabled' : ''}`}>
+      <label className="file-card-toggle">
+        <input
+          type="checkbox"
+          checked={isEnabled}
+          onChange={() => onToggle(entry.id)}
+          disabled={disabled}
+        />
+      </label>
       <div className="file-card-main">
         <div className="file-card-icon csv">
           <i className="ti ti-file-text"></i>
@@ -136,6 +165,19 @@ const FileCard = ({ entry, onRemove, onDelimiterChange, disabled }) => {
                   ))}
                 </>
               )}
+            </div>
+          )}
+
+          {/* Dépendances non satisfaites dans cette session */}
+          {isEnabled && unmetDeps.length > 0 && (
+            <div className="file-validation">
+              {unmetDeps.map((ud, i) => (
+                <span key={`dep${i}`} className="val-warning">
+                  <i className="ti ti-alert-triangle"></i>
+                  {MODULE_LABELS[ud.module]} dépend de <strong>{MODULE_LABELS[ud.dep]}</strong>
+                  {ud.providerName ? ` (${ud.providerName} non sélectionné)` : ' (non fourni dans cette session)'}
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -202,7 +244,7 @@ const ImportPage = () => {
     const id = `file_${Date.now()}_${Math.random().toString(36).slice(2)}`
 
     if (isZip) {
-      setFileEntries(prev => [...prev, { id, file, type: 'zip' }])
+      setFileEntries(prev => [...prev, { id, file, type: 'zip', enabled: true }])
       return
     }
 
@@ -214,7 +256,7 @@ const ImportPage = () => {
       const detectionResults = detectModulesFromHeaders(headers)
       const selectedModules = detectionResults.filter(r => r.detected).map(r => r.moduleKey)
       const validation = validateFile(rows, headers, selectedModules)
-      setFileEntries(prev => [...prev, { id, file, type: 'csv', delimiter, rows, headers, detectionResults, selectedModules, validation }])
+      setFileEntries(prev => [...prev, { id, file, type: 'csv', delimiter, rows, headers, detectionResults, selectedModules, validation, enabled: true }])
     } catch (err) {
       setFileError(`Erreur de lecture : ${err.message}`)
     }
@@ -239,10 +281,39 @@ const ImportPage = () => {
 
   const removeFile = (id) => setFileEntries(prev => prev.filter(e => e.id !== id))
 
+  const toggleFileEnabled = (id) =>
+    setFileEntries(prev => prev.map(e => e.id === id ? { ...e, enabled: !e.enabled } : e))
+
+  // ── Calcul des dépendances non satisfaites ──────────────────────────────────
+
+  const enabledModuleSet = new Set(
+    fileEntries
+      .filter(e => e.enabled !== false)
+      .flatMap(e => e.type === 'csv' ? (e.selectedModules || []) : ['images'])
+  )
+
+  const getUnmetDeps = (entry) => {
+    const modules = entry.type === 'csv' ? (entry.selectedModules || []) : ['images']
+    const unmet = []
+    for (const mk of modules) {
+      for (const dep of MODULE_DEPS[mk] || []) {
+        if (!enabledModuleSet.has(dep)) {
+          const provider = fileEntries.find(f =>
+            f.enabled === false && (
+              f.type === 'csv' ? f.selectedModules?.includes(dep) : dep === 'images'
+            )
+          )
+          unmet.push({ module: mk, dep, providerName: provider?.file?.name || null })
+        }
+      }
+    }
+    return unmet
+  }
+
   // ── Calcul du plan global ───────────────────────────────────────────────────
 
-  const csvEntries = fileEntries.filter(e => e.type === 'csv')
-  const zipEntry   = fileEntries.find(e => e.type === 'zip') || null
+  const csvEntries = fileEntries.filter(e => e.type === 'csv' && e.enabled !== false)
+  const zipEntry   = fileEntries.find(e => e.type === 'zip' && e.enabled !== false) || null
 
   // Tous les slots de modules, triés par importOrder global
   const plan = [
@@ -341,6 +412,8 @@ const ImportPage = () => {
               entry={entry}
               onRemove={removeFile}
               onDelimiterChange={handleDelimiterChange}
+              onToggle={toggleFileEnabled}
+              unmetDeps={entry.enabled !== false ? getUnmetDeps(entry) : []}
               disabled={importing || !!globalReport}
             />
           ))}

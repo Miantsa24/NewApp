@@ -107,6 +107,7 @@
   border: 0.5px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
+  transition: border-color 0.15s;
 }
 
 .file-card-main {
@@ -115,7 +116,59 @@
   gap: 0.65rem;
   flex: 1;
   min-width: 0;
+  transition: opacity 0.2s;
 }
+
+.file-card-sep {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  align-self: center;
+  transition: opacity 0.2s;
+}
+
+/* ── Checkbox activation ────────────────────────────────────────────────── */
+
+.file-card-toggle {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px;
+  align-self: flex-start;
+  margin-top: 3px;
+}
+
+.file-card-toggle input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.file-card-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Carte désactivée : estomper le contenu, pas le checkbox ni le bouton retirer */
+.file-card--disabled .file-card-main {
+  opacity: 0.4;
+}
+
+.file-card--disabled .file-card-sep {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.file-card--disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+/* ── Icones ──────────────────────────────────────────────────────────────── */
 
 .file-card-icon {
   width: 36px;
@@ -228,14 +281,6 @@
 }
 
 /* Séparateur dans la file card */
-.file-card-sep {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
-  align-self: center;
-}
-
 .sep-label {
   font-size: 0.75rem;
   color: #94a3b8;
