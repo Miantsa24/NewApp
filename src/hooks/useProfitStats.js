@@ -26,7 +26,9 @@ const useProfitStats = (orders, products, stock) => {
     })
 
     // ── Quantités vendues (livrées) par productId ──
-    const delivered = orders.filter(o => o.stateId === ORDER_STATES.DELIVERED)
+    const delivered = orders.filter(o =>
+  o.stateId === ORDER_STATES.DELIVERED || o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
+)
 
     const soldQtyMap = {}
     delivered.forEach(order => {

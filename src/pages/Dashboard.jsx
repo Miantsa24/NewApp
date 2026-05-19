@@ -179,7 +179,7 @@ const Dashboard = () => {
         <div className="finance-col finance-col-teal">
           <p className="finance-col-title">
             <i className="ti ti-receipt"></i>
-            Ventes HT (livrées)
+            Ventes HT
           </p>
           <div className="finance-cards">
             <div className="finance-card">
