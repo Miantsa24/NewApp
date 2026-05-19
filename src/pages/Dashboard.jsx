@@ -210,29 +210,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className={`finance-col ${profit.benefice >= 0 ? 'finance-col-profit-pos' : 'finance-col-profit-neg'}`}>
-          <p className="finance-col-title">
-            <i className="ti ti-trending-up"></i>
-            Bénéfice
-          </p>
-          <div className="finance-cards">
-            <div className="finance-card">
-              <span className="finance-label">Ventes − Achats</span>
-              <span className={`finance-value ${profit.benefice >= 0 ? 'profit-pos' : 'profit-neg'}`}>
-                {loading ? '…' : `${profit.benefice >= 0 ? '+' : ''}${fmt(profit.benefice)} €`}
-              </span>
-            </div>
-            <div className="finance-card">
-              <span className="finance-label">Marge</span>
-              <span className={`finance-value ${profit.benefice >= 0 ? 'profit-pos' : 'profit-neg'}`}>
-                {loading || profit.ventesHT === 0
-                  ? '—'
-                  : `${((profit.benefice / profit.ventesHT) * 100).toFixed(1)} %`}
-              </span>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       {/* Row principale : aujourd'hui + total par jour */}

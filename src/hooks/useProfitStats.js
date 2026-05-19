@@ -50,20 +50,30 @@ const useProfitStats = (orders, products, stock) => {
     })
 
     // ── Achats HT = SUM(stock initial × wholesale_price) ──
-    const catAchatsMap = {}
-    let achatsHT = 0
+const productWholesaleMap = {}
+products.forEach(p => {
+  productWholesaleMap[String(p.id)] = {
+    wholesale: parseFloat(p.wholesalePrice || 0),
+    cat: p.categoryDefault || '—',
+  }
+})
 
-    products.forEach(p => {
-      const pid        = String(p.id)
-      const qty        = initialQtyMap[pid] || 0
-      const wholesale  = parseFloat(p.wholesalePrice || 0)
-      const cat        = p.categoryDefault || '—'
-      const ligneAchat = qty * wholesale
+const catAchatsMap = {}
+let achatsHT = 0
 
-      achatsHT += ligneAchat
-      if (!catAchatsMap[cat]) catAchatsMap[cat] = 0
-      catAchatsMap[cat] += ligneAchat
-    })
+delivered.forEach(order => {
+  const rows = toArray(order.raw?.associations?.order_rows?.order_row)
+  rows.forEach(row => {
+    const pid = String(getVal(row.product_id))
+    const qty = parseFloat(getVal(row.product_quantity) || 0)
+    const { wholesale, cat } = productWholesaleMap[pid] || { wholesale: 0, cat: '—' }
+    const ligneAchat = qty * wholesale
+
+    achatsHT += ligneAchat
+    if (!catAchatsMap[cat]) catAchatsMap[cat] = 0
+    catAchatsMap[cat] += ligneAchat
+  })
+})
 
     // ── Ventes HT = commandes livrées, total_paid_tax_excl ──
     const ventesHT = delivered.reduce((sum, o) => sum + parseFloat(o.totalHT || 0), 0)
