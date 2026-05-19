@@ -46,33 +46,29 @@ const useProfitStats = (orders, products, stock, combinations = []) => {
     }
 
     // ── Livrés uniquement pour reconstituer stock initial ──
-    const deliveredOnly = orders.filter(o => o.stateId === ORDER_STATES.DELIVERED)
-
-    // ── Quantités livrées par "productId_combinationId" ──
-    const soldQtyMap = {}
-    deliveredOnly.forEach(order => {
-      const rows = toArray(order.raw?.associations?.order_rows?.order_row)
-      rows.forEach(row => {
-        const pid    = String(getVal(row.product_id))
-        const combId = String(getVal(row.product_attribute_id) || '0')
-        const key    = `${pid}_${combId}`
-        const qty    = parseFloat(getVal(row.product_quantity) || 0)
-        soldQtyMap[key] = (soldQtyMap[key] || 0) + qty
-      })
-    })
+   const deliveredOnly = orders.filter(o => o.stateId === ORDER_STATES.DELIVERED)
+const soldQtyMap = {}
+deliveredOnly.forEach(order => {
+  const rows = toArray(order.raw?.associations?.order_rows?.order_row)
+  rows.forEach(row => {
+    const pid    = String(getVal(row.product_id))
+    const combId = String(getVal(row.product_attribute_id) || '0')
+    const key    = `${pid}_${combId}`
+    const qty    = parseFloat(getVal(row.product_quantity) || 0)
+    soldQtyMap[key] = (soldQtyMap[key] || 0) + qty
+  })
+})
 
     // ── Achats HT global = SUM par ligne stock (physicalQty + livrés) × wholesale ──
-    let achatsHT = 0
-    stock.forEach(s => {
-      const pid    = String(s.productId)
-      const combId = s.combinationId ? String(s.combinationId) : '0'
-      const key    = `${pid}_${combId}`
-      const physical   = s.physicalQty || 0
-      const livres     = soldQtyMap[key] || 0
-      const initialQty = physical + livres
-      const wholesale  = resolveWholesale(pid, combId)
-      achatsHT += initialQty * wholesale
-    })
+   let achatsHT = 0
+stock.forEach(s => {
+  const pid    = String(s.productId)
+  const combId = s.combinationId ? String(s.combinationId) : '0'
+  const key    = `${pid}_${combId}`
+  const wholesale  = resolveWholesale(pid, combId)
+  const initialQty = (s.quantity || 0) + (soldQtyMap[key] || 0)
+  achatsHT += initialQty * wholesale
+})
 
     // ── Livré + PA pour ventes ──
     const delivered = orders.filter(o =>
