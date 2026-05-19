@@ -15,13 +15,13 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [searchDate, setSearchDate] = useState('')
 
-  const { orders, loading: loadingO } = useEnrichedOrders()
+  const { orders, loading: loadingO, combinations } = useEnrichedOrders()
   const { stock,  loading: loadingS } = useEnrichedStock()
   const { products, loading: loadingP } = useEnrichedProducts()
 
   const loading = loadingO || loadingS || loadingP
 
-  const profit = useProfitStats(orders, products, stock)
+  const profit = useProfitStats(orders, products, stock, combinations)
 
   const stats = {
     outOfStock: stock.filter(s => s.outOfStock).length,
@@ -81,6 +81,7 @@ const Dashboard = () => {
   const days = Object.entries(ordersByDay).sort((a, b) => new Date(b[0]) - new Date(a[0]))
   const searchData = searchDate ? ordersByDay[searchDate] : null
 
+  
   return (
     <div className="dashboard">
 
@@ -407,22 +408,36 @@ const Dashboard = () => {
               ))}
             </tbody>
             <tfoot>
-              <tr className="total-row">
-                <td><strong>Total</strong></td>
-                <td className="price" style={{ textAlign: 'right' }}><strong>{fmt(profit.ventesHT)} €</strong></td>
-                <td style={{ textAlign: 'right' }}><strong>{fmt(profit.achatsHT)} €</strong></td>
-                <td style={{ textAlign: 'right' }}>
-                  <strong style={{ color: profit.benefice >= 0 ? '#16a34a' : '#dc2626' }}>
-                    {profit.benefice >= 0 ? '+' : ''}{fmt(profit.benefice)} €
-                  </strong>
-                </td>
-                <td style={{ textAlign: 'right', color: '#64748b' }}>
-                  <strong>
-                    {profit.ventesHT === 0 ? '—' : `${((profit.benefice / profit.ventesHT) * 100).toFixed(1)} %`}
-                  </strong>
-                </td>
-              </tr>
-            </tfoot>
+  <tr className="total-row">
+    <td><strong>Total</strong></td>
+    <td className="price" style={{ textAlign: 'right' }}>
+      <strong>{fmt(profit.byCategory.reduce((s, c) => s + c.ventesHT, 0))} €</strong>
+    </td>
+    <td style={{ textAlign: 'right' }}>
+      <strong>{fmt(profit.byCategory.reduce((s, c) => s + c.achatsHT, 0))} €</strong>
+    </td>
+    <td style={{ textAlign: 'right' }}>
+      {(() => {
+        const v = profit.byCategory.reduce((s, c) => s + c.ventesHT, 0)
+        const a = profit.byCategory.reduce((s, c) => s + c.achatsHT, 0)
+        const b = v - a
+        return (
+          <strong style={{ color: b >= 0 ? '#16a34a' : '#dc2626' }}>
+            {b >= 0 ? '+' : ''}{fmt(b)} €
+          </strong>
+        )
+      })()}
+    </td>
+    <td style={{ textAlign: 'right', color: '#64748b' }}>
+      {(() => {
+        const v = profit.byCategory.reduce((s, c) => s + c.ventesHT, 0)
+        const a = profit.byCategory.reduce((s, c) => s + c.achatsHT, 0)
+        const b = v - a
+        return <strong>{v === 0 ? '—' : `${((b / v) * 100).toFixed(1)} %`}</strong>
+      })()}
+    </td>
+  </tr>
+</tfoot>
           </table>
         )}
       </div>

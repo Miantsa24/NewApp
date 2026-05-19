@@ -26,6 +26,7 @@ const IN_CART_COLOR = '#d97706'
 
 const useEnrichedOrders = () => {
   const [orders, setOrders] = useState([])
+  const [combinations, setCombinations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -76,23 +77,19 @@ const useEnrichedOrders = () => {
         const rawTaxRules     = toArray(taxRulesData?.prestashop?.tax_rules?.tax_rule)
         const rawCombinations = toArray(combinationsData?.prestashop?.combinations?.combination)
 
-        // Map des prix d'achat par déclinaison
         const combinationWholesalePriceMap = {}
         rawCombinations.forEach(combo => {
           const comboId = combo.id
-          // Correction: Accéder à la valeur numérique du prix de gros qui est dans un objet
-          const wholesalePrice = parseFloat(combo.wholesale_price['#text'] || combo.wholesale_price || 0)
+          const wholesalePrice = parseFloat(combo.wholesale_price?.['#text'] || combo.wholesale_price || 0)
           if (wholesalePrice > 0) {
             combinationWholesalePriceMap[comboId] = wholesalePrice
           }
         })
 
-        // Map taux de taxe : tax_id → rate (%)
         const taxRateById = {}
         rawTaxes.forEach((t) => {
           taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
         })
-        // Map groupe de taxe → rate (%)
         const taxRateByGroup = {}
         rawTaxRules.forEach((r) => {
           const groupId = String(getVal(r.id_tax_rules_group))
@@ -102,14 +99,12 @@ const useEnrichedOrders = () => {
           }
         })
 
-        // Map client : id → nom complet
         const customerMap = {}
         rawCustomers.forEach((c) => {
           const id = String(getVal(c.id))
           customerMap[id] = `${c.firstname || ''} ${c.lastname || ''}`.trim()
         })
 
-        // Map état commande : id → { name, color }
         const orderStateMap = {}
         rawOrderStates.forEach((s) => {
           const id = String(getVal(s.id))
@@ -125,21 +120,18 @@ const useEnrichedOrders = () => {
           }
         })
 
-        // Map devise : id → iso_code
         const currencyMap = {}
         rawCurrencies.forEach((c) => {
           const id = String(getVal(c.id))
           currencyMap[id] = getVal(c.iso_code) || '—'
         })
 
-        // Map transporteur : id → nom
         const carrierMap = {}
         rawCarriers.forEach((c) => {
           const id = String(getVal(c.id))
           carrierMap[id] = getVal(c.name) || '—'
         })
 
-        // Map quantité totale par commande (somme des product_quantity de chaque ligne)
         const productCountMap = {}
         rawOrderDetails.forEach((d) => {
           const orderId = String(getVal(d.id_order))
@@ -147,20 +139,18 @@ const useEnrichedOrders = () => {
           productCountMap[orderId] = (productCountMap[orderId] || 0) + qty
         })
 
-        // Map prix produit : id → { priceHT, priceTTC } avec taux réel par produit
         const productPriceMap = {}
         rawProducts.forEach((p) => {
           const id      = String(getVal(p.id))
           const priceHT = parseFloat(getVal(p.price) || 0)
           const groupId = String(getVal(p.id_tax_rules_group))
-          const taxRate = taxRateByGroup[groupId] || 0   // ex: 11.65
+          const taxRate = taxRateByGroup[groupId] || 0
           productPriceMap[id] = {
             priceHT,
             priceTTC: priceHT * (1 + taxRate / 100),
           }
         })
 
-        // Enrichissement des commandes
         const enrichedOrders = rawOrders.map((order) => {
           const id         = String(getVal(order.id))
           const customerId = String(getVal(order.id_customer))
@@ -170,7 +160,6 @@ const useEnrichedOrders = () => {
           const totalHT    = parseFloat(getVal(order.total_paid_tax_excl) || 0)
           const totalTTC   = parseFloat(getVal(order.total_paid_tax_incl) || 0)
 
-          // Enrichir les lignes de commande avec le prix d'achat de la déclinaison
           const enrichedOrderRows = toArray(order.associations?.order_rows?.order_row).map(row => {
             const attributeId = String(getVal(row.product_attribute_id))
             return {
@@ -198,10 +187,8 @@ const useEnrichedOrders = () => {
           }
         })
 
-        // IDs de paniers déjà convertis en commande → ne pas les afficher comme panier
         const cartIdsWithOrders = new Set(rawOrders.map((o) => String(getVal(o.id_cart))))
 
-        // Enrichissement des paniers orphelins (non encore commande, avec produits)
         const enrichedCarts = rawCarts
           .filter((cart) => {
             const cartId = String(getVal(cart.id))
@@ -210,15 +197,14 @@ const useEnrichedOrders = () => {
             return rows.length > 0
           })
           .map((cart) => {
-            const cartId          = String(getVal(cart.id))
-            const customerId      = String(getVal(cart.id_customer))
-            const currencyId      = String(getVal(cart.id_currency))
-            const carrierId       = String(getVal(cart.id_carrier))
-            const addressId       = String(getVal(cart.id_address_delivery))
+            const cartId           = String(getVal(cart.id))
+            const customerId       = String(getVal(cart.id_customer))
+            const currencyId       = String(getVal(cart.id_currency))
+            const carrierId        = String(getVal(cart.id_carrier))
+            const addressId        = String(getVal(cart.id_address_delivery))
             const addressInvoiceId = String(getVal(cart.id_address_invoice))
-            const rows            = toArray(cart?.associations?.cart_rows?.cart_row)
+            const rows             = toArray(cart?.associations?.cart_rows?.cart_row)
 
-            // Calcul des totaux depuis les lignes du panier
             let totalHT  = 0
             let totalTTC = 0
             rows.forEach((row) => {
@@ -256,13 +242,13 @@ const useEnrichedOrders = () => {
             }
           })
 
-        // Fusion et tri par date décroissante
         const allItems = [...enrichedCarts, ...enrichedOrders].sort((a, b) => {
           const da = a.dateAdd === '—' ? '' : a.dateAdd
           const db = b.dateAdd === '—' ? '' : b.dateAdd
           return db.localeCompare(da)
         })
 
+        setCombinations(rawCombinations)
         setOrders(allItems)
       } catch (err) {
         setError(err.message)
@@ -275,7 +261,7 @@ const useEnrichedOrders = () => {
     fetchEnriched()
   }, [refreshKey])
 
-  return { orders, loading, error, refresh }
+  return { orders, loading, error, refresh, combinations }
 }
 
 export default useEnrichedOrders

@@ -15,70 +15,89 @@ const toArray = (data) => {
   return Array.isArray(data) ? data : [data]
 }
 
-const useProfitStats = (orders, products, stock) => {
+const useProfitStats = (orders, products, stock, combinations = []) => {
   return useMemo(() => {
 
-    // ── Stock actuel par productId (somme déclinaisons) ──
-    const stockQtyMap = {}
-    stock.forEach(s => {
-      const pid = String(s.productId)
-      stockQtyMap[pid] = (stockQtyMap[pid] || 0) + s.quantity
+    // ── Wholesale par combinationId ──
+    const comboWholesaleMap = {}
+    combinations.forEach(c => {
+      const id = String(getVal(c.id))
+      const wp = typeof c.wholesale_price === 'number'
+        ? c.wholesale_price
+        : parseFloat(c.wholesale_price?.['#text'] || c.wholesale_price || 0)
+      if (wp > 0) comboWholesaleMap[id] = wp
     })
 
-    // ── Quantités vendues (livrées) par productId ──
-    const delivered = orders.filter(o =>
-  o.stateId === ORDER_STATES.DELIVERED || o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
-)
+    // ── Wholesale + catégorie par productId ──
+    const productWholesaleMap = {}
+    products.forEach(p => {
+      productWholesaleMap[String(p.id)] = {
+        wholesale: parseFloat(p.wholesalePrice || 0),
+        cat: p.categoryDefault || '—',
+      }
+    })
 
+    // ── Résolution wholesale : combo en priorité, sinon produit ──
+    const resolveWholesale = (productId, combinationId) => {
+      if (combinationId && combinationId !== '0' && comboWholesaleMap[combinationId] !== undefined) {
+        return comboWholesaleMap[combinationId]
+      }
+      return productWholesaleMap[String(productId)]?.wholesale || 0
+    }
+
+    // ── Livrés uniquement pour reconstituer stock initial ──
+    const deliveredOnly = orders.filter(o => o.stateId === ORDER_STATES.DELIVERED)
+
+    // ── Quantités livrées par "productId_combinationId" ──
     const soldQtyMap = {}
-    delivered.forEach(order => {
+    deliveredOnly.forEach(order => {
       const rows = toArray(order.raw?.associations?.order_rows?.order_row)
       rows.forEach(row => {
-        const pid = String(getVal(row.product_id))
-        const qty = parseFloat(getVal(row.product_quantity) || 0)
-        soldQtyMap[pid] = (soldQtyMap[pid] || 0) + qty
+        const pid    = String(getVal(row.product_id))
+        const combId = String(getVal(row.product_attribute_id) || '0')
+        const key    = `${pid}_${combId}`
+        const qty    = parseFloat(getVal(row.product_quantity) || 0)
+        soldQtyMap[key] = (soldQtyMap[key] || 0) + qty
       })
     })
 
-    // ── Stock initial = stock actuel + vendu livré ──
-    const initialQtyMap = {}
-    products.forEach(p => {
-      const pid = String(p.id)
-      const actuel = stockQtyMap[pid] ?? parseInt(p.quantity || 0)
-      const vendu  = soldQtyMap[pid] || 0
-      initialQtyMap[pid] = actuel + vendu
+    // ── Achats HT global = SUM par ligne stock (physicalQty + livrés) × wholesale ──
+    let achatsHT = 0
+    stock.forEach(s => {
+      const pid    = String(s.productId)
+      const combId = s.combinationId ? String(s.combinationId) : '0'
+      const key    = `${pid}_${combId}`
+      const physical   = s.physicalQty || 0
+      const livres     = soldQtyMap[key] || 0
+      const initialQty = physical + livres
+      const wholesale  = resolveWholesale(pid, combId)
+      achatsHT += initialQty * wholesale
     })
 
-    // ── Achats HT = SUM(stock initial × wholesale_price) ──
-const productWholesaleMap = {}
-products.forEach(p => {
-  productWholesaleMap[String(p.id)] = {
-    wholesale: parseFloat(p.wholesalePrice || 0),
-    cat: p.categoryDefault || '—',
-  }
-})
+    // ── Livré + PA pour ventes ──
+    const delivered = orders.filter(o =>
+      o.stateId === ORDER_STATES.DELIVERED || o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
+    )
 
-const catAchatsMap = {}
-let achatsHT = 0
+    // ── Achats HT par catégorie = vendus (livré + PA) × wholesale ──
+    const catAchatsMap = {}
+    delivered.forEach(order => {
+      const rows = toArray(order.raw?.associations?.order_rows?.order_row)
+      rows.forEach(row => {
+        const pid    = String(getVal(row.product_id))
+        const combId = String(getVal(row.product_attribute_id) || '0')
+        const qty    = parseFloat(getVal(row.product_quantity) || 0)
+        const wholesale = resolveWholesale(pid, combId)
+        const cat    = productWholesaleMap[pid]?.cat || '—'
+        if (!catAchatsMap[cat]) catAchatsMap[cat] = 0
+        catAchatsMap[cat] += qty * wholesale
+      })
+    })
 
-delivered.forEach(order => {
-  const rows = toArray(order.raw?.associations?.order_rows?.order_row)
-  rows.forEach(row => {
-    const pid = String(getVal(row.product_id))
-    const qty = parseFloat(getVal(row.product_quantity) || 0)
-    const { wholesale, cat } = productWholesaleMap[pid] || { wholesale: 0, cat: '—' }
-    const ligneAchat = qty * wholesale
-
-    achatsHT += ligneAchat
-    if (!catAchatsMap[cat]) catAchatsMap[cat] = 0
-    catAchatsMap[cat] += ligneAchat
-  })
-})
-
-    // ── Ventes HT = commandes livrées, total_paid_tax_excl ──
+    // ── Ventes HT ──
     const ventesHT = delivered.reduce((sum, o) => sum + parseFloat(o.totalHT || 0), 0)
 
-    // ── Ventes HT par catégorie depuis order_rows ──
+    // ── Ventes HT par catégorie ──
     const productCatMap = {}
     products.forEach(p => {
       productCatMap[String(p.id)] = p.categoryDefault || '—'
@@ -92,16 +111,13 @@ delivered.forEach(order => {
         const qty         = parseFloat(getVal(row.product_quantity) || 0)
         const unitPriceHT = parseFloat(getVal(row.unit_price_tax_excl) || 0)
         const cat         = productCatMap[pid] || '—'
-
         if (!catVentesMap[cat]) catVentesMap[cat] = 0
         catVentesMap[cat] += unitPriceHT * qty
       })
     })
 
-    // ── Bénéfice global ──
     const benefice = ventesHT - achatsHT
 
-    // ── Tableau par catégorie ──
     const allCats = new Set([...Object.keys(catVentesMap), ...Object.keys(catAchatsMap)])
     const byCategory = Array.from(allCats).map(cat => {
       const v = catVentesMap[cat] || 0
@@ -110,7 +126,7 @@ delivered.forEach(order => {
     }).sort((a, b) => b.ventesHT - a.ventesHT)
 
     return { ventesHT, achatsHT, benefice, byCategory }
-  }, [orders, products, stock])
+  }, [orders, products, stock, combinations])
 }
 
 export default useProfitStats
