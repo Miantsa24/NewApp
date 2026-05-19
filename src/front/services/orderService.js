@@ -42,7 +42,6 @@ export const getDefaultCurrency = async () => {
 }
 
 export const createAddress = async (customerId, addressData) => {
-  // Récupérer dynamiquement l'ID du pays France actif (évite le hardcode qui peut varier selon l'installation PS)
   let countryId = '8'
   try {
     const ctryResp = await axiosInstance.get('/countries?display=full&filter[active]=[1]&filter[iso_code]=[FR]')
@@ -73,7 +72,7 @@ export const createAddress = async (customerId, addressData) => {
   return String(getVal(result?.prestashop?.address?.id))
 }
 
-// ── LocalStorage helpers pour le cart PS ──────────────────────
+// ── LocalStorage helpers pour le cart PS ──────────────────────────────
 const psCartKey = (customerId) => `ps_cart_${customerId}`
 
 export const getStoredPsCart = (customerId) => {
@@ -93,12 +92,8 @@ export const clearPsCart = (customerId) => {
   localStorage.removeItem(psCartKey(customerId))
 }
 
-// ── PS Cart API ────────────────────────────────────────────────
+// ── PS Cart API ──────────────────────────────────────────────────────
 
-/**
- * Crée un cart PS vide pour un client (adresse=0, sera mise à jour à la validation).
- * Sauvegarde l'ID + secure_key en localStorage.
- */
 export const createEmptyPsCart = async (customerId, currencyId, carrierId) => {
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -134,10 +129,6 @@ export const createEmptyPsCart = async (customerId, currencyId, carrierId) => {
   return { cartId, cartSecureKey }
 }
 
-/**
- * Synchronise les lignes du cart PS avec les articles du panier localStorage.
- * Appelé après chaque ajout/retrait d'article et à la validation (avec la vraie adresse).
- */
 export const syncPsCartRows = async ({
   cartId, cartSecureKey, customerId, currencyId, carrierId, addressId = '0', items,
 }) => {
@@ -186,26 +177,14 @@ ${cartRowsXml}
   })
 }
 
-/**
- * Supprime le cart PS et efface le localStorage.
- * Appelé quand le panier est vidé ou après une commande réussie.
- */
 export const deletePsCart = async (customerId, cartId) => {
   clearPsCart(customerId)
   await axiosInstance.delete(`/carts/${cartId}`)
 }
 
-/**
- * Charge le panier PS actif d'un utilisateur dans le localStorage.
- * Utilisé quand le panier local est vide mais qu'un cart existe en PS
- * (ex: panier créé via import CSV ou autre canal externe).
- *
- * @returns {{ cartId, cartSecureKey, carrierId, currencyId, items }} | null
- */
 export const loadCartFromPs = async (customerId) => {
   const psUrl = import.meta.env.VITE_PRESTASHOP_URL
 
-  // 1. Carts du client + commandes pour filtrer les carts déjà convertis
   const [cartsResp, ordersResp, productsResp, combsResp, taxesResp, taxRulesResp] = await Promise.all([
     axiosInstance.get(`/carts?display=full&filter[id_customer]=[${customerId}]`),
     axiosInstance.get(`/orders?display=full&filter[id_customer]=[${customerId}]`),
@@ -227,7 +206,6 @@ export const loadCartFromPs = async (customerId) => {
   const rawProducts = toArray(productsData?.prestashop?.products?.product)
   const rawCombs    = toArray(combsData?.prestashop?.combinations?.combination)
 
-  // Map taux de taxe réels : tax_id → rate, group_id → rate
   const taxRateById = {}
   toArray(taxesData?.prestashop?.taxes?.tax).forEach(t => {
     taxRateById[String(getVal(t.id))] = parseFloat(String(getVal(t.rate) || '0').replace(',', '.'))
@@ -239,10 +217,8 @@ export const loadCartFromPs = async (customerId) => {
     if (!taxRateByGroup[gid] && taxRateById[tid] !== undefined) taxRateByGroup[gid] = taxRateById[tid]
   })
 
-  // Carts déjà convertis en commande
   const convertedIds = new Set(rawOrders.map(o => String(getVal(o.id_cart))))
 
-  // Trouver le cart actif (non converti, avec lignes)
   const activeCart = rawCarts.find(cart => {
     const id = String(getVal(cart.id))
     if (convertedIds.has(id)) return false
@@ -250,13 +226,12 @@ export const loadCartFromPs = async (customerId) => {
   })
   if (!activeCart) return null
 
-  const cartId       = String(getVal(activeCart.id))
+  const cartId        = String(getVal(activeCart.id))
   const cartSecureKey = String(getVal(activeCart.secure_key) || '')
-  const carrierId    = String(getVal(activeCart.id_carrier) || '1')
-  const currencyId   = String(getVal(activeCart.id_currency) || '1')
-  const rows         = toArray(activeCart?.associations?.cart_rows?.cart_row)
+  const carrierId     = String(getVal(activeCart.id_carrier) || '1')
+  const currencyId    = String(getVal(activeCart.id_currency) || '1')
+  const rows          = toArray(activeCart?.associations?.cart_rows?.cart_row)
 
-  // Maps produits et combinaisons avec taux de taxe réels
   const productMap = {}
   rawProducts.forEach(p => {
     const id      = String(getVal(p.id))
@@ -273,7 +248,6 @@ export const loadCartFromPs = async (customerId) => {
     }
   })
 
-  // combMap : id → { reference, priceDelta (HT) }
   const combMap = {}
   rawCombs.forEach(c => {
     const id = String(getVal(c.id))
@@ -283,7 +257,6 @@ export const loadCartFromPs = async (customerId) => {
     }
   })
 
-  // Construire les items au format cart localStorage avec prix TTC correct
   const items = rows.map(row => {
     const productId     = String(getVal(row.id_product))
     const combinationId = String(getVal(row.id_product_attribute) || '0')
@@ -309,11 +282,6 @@ export const loadCartFromPs = async (customerId) => {
   return { cartId, cartSecureKey, carrierId, currencyId, items }
 }
 
-/**
- * Crée une commande depuis le panier client.
- * Si existingCartId est fourni (cart PS déjà créé), l'étape 1 est sautée.
- * L'étape 2 (sync lignes + adresse) est toujours exécutée.
- */
 export const createOrder = async ({
   customerId, addressId, carrierId, currencyId, cart, totalHT, totalTTC,
   existingCartId, existingCartSecureKey,
@@ -326,7 +294,6 @@ export const createOrder = async ({
     cartId = existingCartId
     cartSecureKey = existingCartSecureKey
   } else {
-    // Étape 1 : créer le panier PrestaShop
     const cartXml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <cart>
@@ -358,7 +325,6 @@ export const createOrder = async ({
     if (!cartId || cartId === 'undefined') throw new Error('Erreur création panier')
   }
 
-  // Étape 2 : peupler le panier — met à jour adresse + lignes (toujours exécutée)
   const cartRowsXml = cart.map(item =>
     `        <cart_row>
           <id_product>${item.productId}</id_product>
@@ -402,7 +368,6 @@ ${cartRowsXml}
     headers: { 'Content-Type': 'application/xml' },
   })
 
-  // Étape 3 : créer la commande
   const orderXml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <order>
@@ -458,7 +423,6 @@ ${cartRowsXml}
     const orderResult = parseXML(orderResponse.data)
     orderId = String(getVal(orderResult?.prestashop?.order?.id) || '')
   } catch (err) {
-    // 500 = hook PS (gamification…) — la commande est committée, on la retrouve via id_cart
     if (err.response?.status === 500) {
       try {
         const findResp = await axiosInstance.get(`/orders?display=full&filter[id_cart]=[${cartId}]`)
@@ -466,7 +430,7 @@ ${cartRowsXml}
         const raw = findParsed?.prestashop?.orders?.order
         const found = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
         if (found) orderId = String(getVal(found.id) || '')
-      } catch { /* orderId reste vide → erreur ci-dessous */ }
+      } catch { /* orderId reste vide */ }
       if (!orderId) throw err
     } else {
       console.error('Order creation error:', err.response?.data)
@@ -476,7 +440,6 @@ ${cartRowsXml}
 
   if (!orderId || orderId === 'undefined') throw new Error('Erreur création commande')
 
-  // Étape 4 : passer l'état à 2 "Paiement accepté" via GET + PUT
   const getResp = await axiosInstance.get(`/orders/${orderId}?display=full`)
   const orderData = parseXML(getResp.data)
   const order = orderData?.prestashop?.order
@@ -492,13 +455,6 @@ ${cartRowsXml}
   return { orderId, reference }
 }
 
-/**
- * Charge les articles d'une commande PS en état "Dans le panier" pour le client.
- * Utilisé quand le cart PS a été converti en commande (import CSV) mais que la commande
- * n'est pas encore confirmée (état "Dans le panier").
- *
- * @returns {{ orderId, reference, carrierId, currencyId, items }} | null
- */
 export const loadDansPanierOrderFromPs = async (customerId) => {
   const psUrl = import.meta.env.VITE_PRESTASHOP_URL
 
@@ -577,7 +533,6 @@ export const loadDansPanierOrderFromPs = async (customerId) => {
     const qty           = parseInt(getVal(detail.product_quantity) || 1)
     const hasComb       = combinationId && combinationId !== '0'
     const prod          = productMap[productId] || { name: `#${productId}`, priceHT: 0, taxRate: 0, imageUrl: null }
-    // Pour les détails de commande, le prix unitaire stocké dans order_detail peut être utilisé directement
     const unitPriceTTC = parseFloat(String(getVal(detail.unit_price_tax_incl) || '0').replace(',', '.'))
     const price = unitPriceTTC > 0
       ? unitPriceTTC.toFixed(2)
@@ -613,11 +568,6 @@ const buildStockXml = (stockId, productId, quantity, combinationId) =>
   </stock_available>
 </prestashop>`
 
-/**
- * Décrémente le stock PS pour chaque article du panier.
- * Appelé après validation d'une commande (état → Paiement accepté).
- * Les commandes "Dans le panier" ne déclenchent PAS cette fonction.
- */
 export const decrementStockForItems = async (items) => {
   for (const item of items) {
     try {
@@ -641,11 +591,6 @@ export const decrementStockForItems = async (items) => {
   }
 }
 
-/**
- * Re-incrémente le stock PS après validation d'une commande.
- * PS décrémente automatiquement via validateOrder() — on annule ici.
- * Le stock ne doit baisser qu'à la livraison (bouton "Livrer").
- */
 export const reIncrementStockForItems = async (items) => {
   for (const item of items) {
     try {
@@ -669,10 +614,6 @@ export const reIncrementStockForItems = async (items) => {
   }
 }
 
-/**
- * Confirme une commande "Dans le panier" en passant son état à "Paiement accepté" (state 2).
- * Utilisé quand le client finalise une commande importée depuis CartPage.
- */
 export const confirmDansPanierOrder = async (orderId) => {
   const getResp = await axiosInstance.get(`/orders/${orderId}?display=full`)
   const order   = parseXML(getResp.data)?.prestashop?.order
@@ -734,3 +675,117 @@ const buildOrderStateXml = (order, newState) => `<?xml version="1.0" encoding="U
     <reference>${getVal(order.reference)}</reference>
   </order>
 </prestashop>`
+
+// ── Fetch des articles d'une commande ──────────────────────────────────
+
+export const fetchOrderItems = async (orderId) => {
+  const psUrl = import.meta.env.VITE_PRESTASHOP_URL
+  const [detailsResp, productsResp, combsResp] = await Promise.all([
+    axiosInstance.get(`/order_details?display=full&filter[id_order]=[${orderId}]`),
+    axiosInstance.get('/products?display=full'),
+    axiosInstance.get('/combinations?display=full'),
+  ])
+
+  const rawDetails  = toArray(parseXML(detailsResp.data)?.prestashop?.order_details?.order_detail)
+  const rawProducts = toArray(parseXML(productsResp.data)?.prestashop?.products?.product)
+  const rawCombs    = toArray(parseXML(combsResp.data)?.prestashop?.combinations?.combination)
+
+  const productMap = {}
+  rawProducts.forEach(p => {
+    const id      = String(getVal(p.id))
+    const imgId   = getVal(p.id_default_image)
+    const nameRaw = p.name?.language?.['#text'] || p.name?.language
+    productMap[id] = {
+      name:     typeof nameRaw === 'object' ? String(Object.values(nameRaw)[0] || '') : String(nameRaw || '—'),
+      imageUrl: imgId ? `${psUrl}/api/images/products/${id}/${imgId}` : null,
+    }
+  })
+
+  const combMap = {}
+  rawCombs.forEach(c => {
+    combMap[String(getVal(c.id))] = getVal(c.reference) || null
+  })
+
+  return rawDetails.map(d => {
+    const productId     = String(getVal(d.product_id))
+    const combinationId = String(getVal(d.product_attribute_id) || '0')
+    const qty           = parseInt(getVal(d.product_quantity) || 1)
+    const hasComb       = combinationId && combinationId !== '0'
+    const unitPriceTTC  = parseFloat(String(getVal(d.unit_price_tax_incl) || '0').replace(',', '.'))
+    const prod          = productMap[productId] || { name: `#${productId}`, imageUrl: null }
+    return {
+      productId,
+      combinationId:  hasComb ? combinationId : null,
+      name:           prod.name,
+      attributeLabel: hasComb ? (combMap[combinationId] || `Décl.#${combinationId}`) : null,
+      imageUrl:       prod.imageUrl,
+      qty,
+      unitPriceTTC,
+    }
+  })
+}
+
+// ── Vérification de stock pour une liste d'articles ──────────────────────
+
+export const checkStockForItems = async (items) => {
+  const results = []
+  for (const item of items) {
+    const combId = (item.combinationId && item.combinationId !== '0') ? item.combinationId : '0'
+    try {
+      const resp  = await axiosInstance.get(
+        `/stock_availables?display=full&filter[id_product]=[${item.productId}]&filter[id_product_attribute]=[${combId}]`
+      )
+      const data  = parseXML(resp.data)
+      const raw   = data?.prestashop?.stock_availables?.stock_available
+      const stock = raw ? (Array.isArray(raw) ? raw[0] : raw) : null
+      const available = stock ? parseInt(getVal(stock.quantity) || '0', 10) : 0
+      results.push({ ...item, available, sufficient: available >= item.qty })
+    } catch {
+      results.push({ ...item, available: 0, sufficient: false })
+    }
+  }
+  return results
+}
+
+// ── Duplication de commande (reorder) ──────────────────────────────────
+// items contient déjà les quantités multipliées.
+// La commande est créée à l'état 2 (PS décrémente le stock automatiquement)
+// puis immédiatement passée à l'état 5 "Livré".
+
+export const createReorder = async ({ customerId, items }) => {
+  const [addresses, carrierId, currencyId] = await Promise.all([
+    getCustomerAddresses(customerId),
+    getClickAndCollectCarrier(),
+    getDefaultCurrency(),
+  ])
+
+  if (!addresses.length) throw new Error('Aucune adresse client trouvée')
+  const addressId = String(getVal(addresses[0].id))
+
+  const totalTTCNum = items.reduce((s, i) => s + (i.unitPriceTTC || 0) * i.qty, 0)
+  const totalHT     = (totalTTCNum / 1.2).toFixed(6)
+  const totalTTC    = totalTTCNum.toFixed(6)
+
+  const cart = items.map(i => ({
+    productId:     i.productId,
+    combinationId: i.combinationId,
+    qty:           i.qty,
+  }))
+
+  const { orderId, reference } = await createOrder({
+    customerId, addressId, carrierId, currencyId,
+    cart, totalHT, totalTTC,
+  })
+
+  // Passe immédiatement à l'état 5 "Livré" sans ré-incrémenter le stock
+  const getResp  = await axiosInstance.get(`/orders/${orderId}?display=full`)
+  const orderRaw = parseXML(getResp.data)?.prestashop?.order
+  if (orderRaw) {
+    const livraisonXml = buildOrderStateXml(orderRaw, '5')
+    await axiosInstance.put(`/orders/${orderId}`, livraisonXml, {
+      headers: { 'Content-Type': 'application/xml' },
+    })
+  }
+
+  return { orderId, reference, totalTTC: totalTTCNum.toFixed(2) }
+}
