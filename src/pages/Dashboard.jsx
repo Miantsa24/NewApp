@@ -375,10 +375,10 @@ const Dashboard = () => {
               <tfoot>
                 <tr className="total-row">
                   <td><strong>Total général</strong></td>
-                  <td><strong>{stats.totalOrders}</strong></td>
+                  <td><strong>{relevantOrders.length}</strong></td>
                   <td><strong>{relevantOrders.reduce((s, o) => s + parseInt(o.productCount || 0), 0)}</strong></td>
                   <td></td>
-                  <td className="price"><strong>{stats.totalRevenue} €</strong></td>
+                  <td className="price"><strong>{relevantOrders.reduce((s, o) => s + parseFloat(o.totalTTC || 0), 0).toFixed(2)} €</strong></td>
                   <td></td>
                 </tr>
               </tfoot>
