@@ -9,7 +9,6 @@ const isDansPanier = (stateId, stateName) =>
 
 const FILTER_OPTIONS = [
   { value: 'all',       label: 'Tous les états' },
-  { value: 'cart',      label: 'Dans le panier' },
   { value: 'paid',      label: 'Paiement accepté' },
   { value: 'delivered', label: 'Livré' },
   { value: 'cancelled', label: 'Annulé' },
@@ -49,15 +48,16 @@ const OrdersList = () => {
     }
   }
 
-  const filtered = filterState === 'all' ? orders : orders.filter(o => {
+  const filtered = orders.filter(o => {
+  if (isDansPanier(o.stateId, o.state)) return false
+  if (filterState === 'all') return true
     const sid   = o.stateId
     const sname = o.state
-    if (filterState === 'cart')      return isDansPanier(sid, sname)
-    if (filterState === 'paid')      return sid === ORDER_STATES.PAYMENT_ACCEPTED
-    if (filterState === 'delivered') return sid === ORDER_STATES.DELIVERED
-    if (filterState === 'cancelled') return sid === ORDER_STATES.CANCELLED
-    return true
-  })
+    if (filterState === 'paid')      return o.stateId === ORDER_STATES.PAYMENT_ACCEPTED
+  if (filterState === 'delivered') return o.stateId === ORDER_STATES.DELIVERED
+  if (filterState === 'cancelled') return o.stateId === ORDER_STATES.CANCELLED
+  return true
+})
 
   return (
     <div className="list-container">
